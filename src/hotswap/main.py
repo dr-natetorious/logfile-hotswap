@@ -331,8 +331,6 @@ def main() -> int:
     return 0 if success else 1
 
 if __name__ == "__main__":
-    
-    hotswap = FdHotSwap(16033, "/mnt/c/git/logfile-hotswap/bin/test.log", "/mnt/c/git/logfile-hotswap/bin/test2.log", verbose=True)
-    success = hotswap.run()
-     
+    #hotswap = FdHotSwap(21367, "/mnt/c/git/logfile-hotswap/bin/test.log", "/mnt/c/git/logfile-hotswap/bin/test2.log", verbose=True)
+    #success = hotswap.run()
     sys.exit(main())
