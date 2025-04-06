@@ -1,0 +1,26 @@
+# Build options
+build --incompatible_enable_cc_toolchain_resolution
+build --strip=always
+
+# Use Python 3.12 toolchain
+build --repo_env=PYTHON_BIN_PATH=python3
+
+# Keep the build output cleaner
+build --show_progress_rate_limit=5
+
+# Cache and output directories
+build --symlink_prefix=/tmp/bddazel-out/
+startup --output_user_root=/tmp/badddefzel-output
+
+# Allow the execution platform to include remote execution properties
+build --enable_platform_specific_config
+
+# Convenience flags for different build types
+build:debug --compilation_mode=dbg
+build:release --compilation_mode=opt
+
+# Make Bazel show the errors as they happen
+test --test_output=errors
+
+# Optimizations
+build:opt --compilation_mode=opt
