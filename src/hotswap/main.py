@@ -76,19 +76,31 @@ class FdHotSwap:
             True if the current user owns the process, False otherwise.
         """
         try:
-            proc_stat = Path(f"/proc/{self.pid}/stat").read_text()
-            proc_uid = int(proc_stat.split()[0])
+            # Get the UID of the process by checking the owner of the /proc/{pid} directory
+            proc_path = Path(f"/proc/{self.pid}")
+            proc_stat = proc_path.stat()
+            proc_uid = proc_stat.st_uid
+            
+            # Get the current user's UID
             current_uid = os.getuid()
             
             if proc_uid != current_uid:
-                proc_user = pwd.getpwuid(proc_uid).pw_name
-                current_user = pwd.getpwuid(current_uid).pw_name
-                self.log(f"Error: Process {self.pid} is owned by {proc_user}, but you are {current_user}.")
-                self.log("You can only redirect file descriptors for processes you own.")
+                try:
+                    proc_user = pwd.getpwuid(proc_uid).pw_name
+                    current_user = pwd.getpwuid(current_uid).pw_name
+                    self.log(f"Error: Process {self.pid} is owned by {proc_user}, but you are {current_user}.")
+                    self.log("You can only redirect file descriptors for processes you own.")
+                except KeyError:
+                    # Handle the case where a UID doesn't map to a username
+                    self.log(f"Error: Process {self.pid} is owned by UID {proc_uid}, but you are UID {current_uid}.")
+                    self.log("You can only redirect file descriptors for processes you own.")
                 return False
             return True
-        except (FileNotFoundError, IndexError, ValueError):
-            self.log(f"Error: Unable to determine ownership of process {self.pid}.")
+        except (FileNotFoundError, PermissionError):
+            self.log(f"Error: Unable to determine ownership of process {self.pid}. Process may not exist or you lack permissions.")
+            return False
+        except Exception as e:
+            self.log(f"Error checking process ownership: {str(e)}")
             return False
     
     def find_file_descriptor(self) -> bool:
@@ -159,29 +171,32 @@ class FdHotSwap:
             fd, script_path = tempfile.mkstemp(suffix='.gdb')
             os.close(fd)
             
+            # Escape backslashes in paths for GDB
+            new_path_escaped = str(self.new_path).replace('\\', '\\\\')
+        
             script_content = f"""
 set pagination off
 set confirm off
+set height 0
+set width 0
 
 # Attach to the process
 attach {self.pid}
 
-# Open the new file with same mode as original (assuming "a" for append)
-# O_WRONLY (1) | O_CREAT (0x40) | O_APPEND (0x400) = 0x441 (1089)
-call $new_fd = open("{self.new_path}", 1089, 0644)
+# Call libc's freopen to safely redirect the file descriptor
+# This avoids issues with file descriptor inheritance between GDB and the target process
+call (void*)freopen("{new_path_escaped}", "a", fdopen({self.fd_number}, "a"))
 
-# Check if new file opened successfully
-if $new_fd == -1
-  echo Error: Failed to open {self.new_path}\\n
-  detach
-  quit 1
+# Check the result (will be NULL on failure)
+if $1 == 0
+    echo REDIRECT_FAILED\\n
+    detach
+    quit 1
+else
+    echo REDIRECT_SUCCESS\\n
+    # Flush the file to ensure writes are committed
+    call fflush((FILE*)$1)
 end
-
-# Redirect the file descriptor
-call dup2($new_fd, {self.fd_number})
-
-# Close the temporary file descriptor
-call close($new_fd)
 
 # Detach and quit
 detach
@@ -316,4 +331,8 @@ def main() -> int:
     return 0 if success else 1
 
 if __name__ == "__main__":
+    
+    hotswap = FdHotSwap(16033, "/mnt/c/git/logfile-hotswap/bin/test.log", "/mnt/c/git/logfile-hotswap/bin/test2.log", verbose=True)
+    success = hotswap.run()
+     
     sys.exit(main())
