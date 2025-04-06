@@ -18,9 +18,6 @@ RUN echo "deb [arch=amd64 signed-by=/usr/share/keyrings/bazel-archive-keyring.gp
 
 RUN apt update -y && apt install -y bazel
 
-# Set up workspace directory
-WORKDIR /workspace
-
 # Add entrypoint script
 COPY ./.docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
