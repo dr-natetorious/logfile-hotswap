@@ -52,7 +52,6 @@ sudo docker run --rm -it \
     --name ${CONTAINER_NAME} \
     -v ${MOUNT_PATH} \
     --user $(id -u):$(id -g) \
-    --entrypoint /bin/bash \
-    ${IMAGE_NAME} 
+    ${IMAGE_NAME} "$@"
 
 echo "=== Container session ended ==="
