@@ -24,7 +24,7 @@ class VariableCommand(BaseCommand):
         elif command_name == 'echo':
             return self._echo_with_vars(args_str, shell)
         elif command_name == 'expr':
-            return self._execute_expression(args_str, shell)
+            return self._execute_expr(args_str, shell)
         
         return False
     
@@ -97,14 +97,21 @@ class VariableCommand(BaseCommand):
         print(expanded_text)
         return True
         
-    def _execute_expr(self, expr, shell):
-        """Execute an expression and return the result."""
+    def _execute_expr(self, expr_str, shell):
+        """Execute a Python expression."""
+        if not expr_str.strip():
+            print("Error: Expression required")
+            print("Usage: expr <python_expression>")
+            return False
+            
         try:
-            result = shell.variable_manager.execute(expr)
-            return result
-        except Exception as e:
-            print(f"Error evaluating expression: {e}")
-            return None
+            result = shell.variable_manager.execute(expr_str)
+            if result is not None:
+                print(repr(result))
+            return True
+        except (SyntaxError, ValueError) as e:
+            print(f"Error: {e}")
+            return False
     
     def get_completions(self, text):
         """
