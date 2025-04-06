@@ -5,13 +5,9 @@ TARGET = $(BIN_DIR)/hotswap
 SOURCES = $(wildcard *.py)
 DEPENDENCIES = pyinstaller
 
-# Use virtual environment binaries
-PYTHON = $(VENV_DIR)/bin/python3
-PIP = $(VENV_DIR)/bin/pip3
-
 .PHONY: all clean venv install-deps
 
-all: venv install-deps $(BIN_DIR) $(TARGET)
+all: venv $(BIN_DIR) $(TARGET)
 
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
@@ -21,16 +17,21 @@ venv:
 		echo "Creating virtual environment in $(VENV_DIR)..."; \
 		python3 -m venv $(VENV_DIR); \
 	else \
-		echo "Virtual environment already exists"; \
+		# Check if the venv structure is intact by testing for python binary \
+		if [ ! -f "$(VENV_DIR)/bin/python3" ]; then \
+			echo "Virtual environment exists but appears broken. Recreating..."; \
+			rm -rf $(VENV_DIR); \
+			python3 -m venv $(VENV_DIR); \
+		else \
+			echo "Using existing virtual environment"; \
+		fi \
 	fi
+	$(VENV_DIR)/bin/pip install --upgrade pip
+	$(VENV_DIR)/bin/pip install $(DEPENDENCIES)
 
-install-deps: venv
-	$(PIP) install --upgrade pip
-	$(PIP) install $(DEPENDENCIES)
-
-$(TARGET): $(SOURCES) | $(BIN_DIR) venv install-deps
+$(TARGET): $(SOURCES) | $(BIN_DIR) venv
 	# Combine Python files into a single executable
-	$(PYTHON) -m PyInstaller --onefile --clean --name hotswap \
+	$(VENV_DIR)/bin/python -m PyInstaller --onefile --clean --name hotswap \
 		--distpath $(BIN_DIR) \
 		--specpath $(PROJECT_ROOT)build \
 		--workpath $(PROJECT_ROOT)build \
@@ -48,6 +49,6 @@ clean-all: clean
 # Helper target for checking Python version and dependencies
 check-env: venv
 	@echo "Python version:"
-	@$(PYTHON) --version
+	@$(VENV_DIR)/bin/python --version
 	@echo "Required dependencies:"
-	@$(PIP) list | grep -E "$(DEPENDENCIES)" || echo "Missing dependencies - run 'make install-deps'"
+	@$(VENV_DIR)/bin/pip list | grep -E "$(DEPENDENCIES)" || echo "Missing dependencies - run 'make install-deps'"
