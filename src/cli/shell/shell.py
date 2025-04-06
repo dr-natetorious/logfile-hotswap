@@ -9,6 +9,7 @@ from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from .command_handler import CommandHandler
 from .completer import ShellCompleter
 from .exceptions import ShellExit
+from .variable_manager import VariableManager
 
 
 class ServerShell:
@@ -19,6 +20,9 @@ class ServerShell:
         self.config = config or {}
         self.running = False
         self.command_handler = CommandHandler()
+        
+        # Initialize the variable manager
+        self.variable_manager = VariableManager()
         
         # Set up prompt session
         self.session = PromptSession(
@@ -76,7 +80,11 @@ class ServerShell:
     
     def process_command(self, user_input):
         """Process a command string."""
-        cmd_parts = user_input.strip().split(maxsplit=1)
+        # Expand variables in the command input
+        expanded_input = self.variable_manager.expand_variables(user_input)
+        
+        # Split the command and arguments
+        cmd_parts = expanded_input.strip().split(maxsplit=1)
         cmd_name = cmd_parts[0].lower()
         cmd_args = cmd_parts[1] if len(cmd_parts) > 1 else ""
         
