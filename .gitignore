@@ -177,3 +177,4 @@ cython_debug/
 bin/**
 bazel-output/
 MODULE.bazel.lock
+.shell_history

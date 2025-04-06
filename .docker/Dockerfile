@@ -9,7 +9,8 @@ RUN apt-get update && apt-get install -y \
     git \
     unzip \
     wget \
-    python3-virtualenv
+    python3-virtualenv \
+    python3.12-venv
 
 RUN apt install apt-transport-https curl gnupg -y
 RUN curl -fsSL https://bazel.build/bazel-release.pub.gpg | gpg --dearmor >bazel-archive-keyring.gpg
