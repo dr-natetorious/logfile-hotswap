@@ -6,6 +6,7 @@ EXPOSE 5678
 COPY /src /src
 WORKDIR /src/logger
 RUN make all
+RUN chmod +x bin/threaded_logger
 
 #FROM base AS testing
 #COPY /examples /examples/

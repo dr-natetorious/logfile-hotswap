@@ -6,6 +6,7 @@
 #include <signal.h>
 #include <time.h>
 #include <stdbool.h>
+#include <sys/time.h>  // For gettimeofday to seed random
 
 // Global variables
 FILE *log_file = NULL;
@@ -16,10 +17,11 @@ int sleep_ms = 1000; // Default value
 // Structure to pass data to threads
 typedef struct {
     int thread_id;
+    int jitter_ms;  // Jitter offset in milliseconds
 } thread_data_t;
 
 // Signal handler for CTRL+C
-void handle_sigint(int sig __attribute__((unused))){
+void handle_sigint(int) {
     printf("\nReceived SIGINT (Ctrl+C). Gracefully shutting down...\n");
     running = false;
 }
@@ -31,7 +33,10 @@ void *thread_function(void *arg) {
     char timestamp[64];
     time_t now;
     struct tm *tm_info;
-
+    
+    // Apply initial jitter to stagger thread starts
+    usleep(data->jitter_ms * 1000);
+    
     while (running) {
         // Get current time
         time(&now);
@@ -45,7 +50,10 @@ void *thread_function(void *arg) {
         pthread_mutex_unlock(&file_mutex);
 
         // Sleep for the specified milliseconds
-        usleep(sleep_ms * 1000); // Convert ms to microseconds
+        // Add a small random jitter to each sleep cycle to prevent synchronization
+        int actual_sleep = sleep_ms + (rand() % 50) - 25;  // +/- 25ms variation
+        if (actual_sleep < 10) actual_sleep = 10;  // Ensure minimum sleep time
+        usleep(actual_sleep * 1000); // Convert ms to microseconds
     }
 
     pthread_mutex_lock(&file_mutex);
@@ -69,6 +77,11 @@ int main(int argc, char *argv[]) {
         print_usage(argv[0]);
         return 1;
     }
+
+    // Seed random number generator with current time
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    srand(tv.tv_usec);
 
     // Parse command line arguments
     const char *logfile_path = argv[1];
@@ -109,6 +122,14 @@ int main(int argc, char *argv[]) {
         }
         
         data->thread_id = i;
+        
+        // Generate a random jitter between 0-1000ms
+        // This creates an unpredictable offset pattern
+        data->jitter_ms = rand() % 1000;
+        
+        // Also add a small deterministic component based on thread ID
+        // to ensure threads don't accidentally get the same random value
+        data->jitter_ms += (i * 37) % 200;  // Using prime number 37 to avoid patterns
         
         if (pthread_create(&threads[i], NULL, thread_function, data) != 0) {
             perror("Failed to create thread");
