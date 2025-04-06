@@ -1,28 +1,33 @@
 """
-Exit command implementation.
+Exit command implementation with alias support.
 """
-from .base import BaseCommand
+from typing import List, ClassVar
+from .declarative import DeclarativeCommand, command, CommandRegistry
 from shell.exceptions import ShellExit
 
-
-class ExitCommand(BaseCommand):
+@command(name="exit")
+class ExitCommand(DeclarativeCommand):
     """
-    Exits the shell.
+    Exit the shell application.
     """
+    # Class variable to store aliases
+    aliases: ClassVar[List[str]] = ["quit", "bye"]
     
-    def get_command_names(self):
-        return ['exit', 'quit', 'bye']
+    def __init__(self):
+        super().__init__()
+        # Register aliases during initialization
+        self._register_aliases()
     
-    def execute(self, command_name, args_str, shell):
+    def _register_aliases(self):
+        """Register all aliases as commands that point to this class."""
+        for alias in self.aliases:
+            CommandRegistry._commands[alias] = self.__class__
+    
+    @classmethod
+    def get_command_names(cls):
+        """Return all command names including aliases."""
+        return [cls._command_name] + cls.aliases
+    
+    def execute_command(self, shell) -> bool:
         # Raise ShellExit exception to signal the shell to exit
         raise ShellExit()
-    
-    def get_help(self):
-        return """
-Exit the shell application.
-
-Usage:
-  exit  - Exit the shell
-  quit  - Same as exit
-  bye   - Same as exit
-"""

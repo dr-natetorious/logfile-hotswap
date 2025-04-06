@@ -1,26 +1,32 @@
 """
-Help command implementation.
+Help command implementation using the declarative approach.
 """
-from .base import BaseCommand
+from typing import Optional
+
+from .declarative import DeclarativeCommand, command
 
 
-class HelpCommand(BaseCommand):
+@command(name="help")
+class HelpCommand(DeclarativeCommand):
     """
-    Provides help on available commands.
+    Provides help information for available commands.
     """
+    # Optional command name to get help for
+    topic: Optional[str] = None
     
-    def get_command_names(self):
-        return ['help', '?']
-    
-    def execute(self, command_name, args_str, shell):
-        args = self.parse_args(args_str)
+    def execute_command(self, shell) -> bool:
+        """
+        Execute the help command.
         
-        if not args:
+        If topic is provided, show detailed help for that command.
+        Otherwise, display a list of all available commands.
+        """
+        if not self.topic:
             # Display list of all commands
             self._display_all_commands(shell)
         else:
             # Display help for specific command
-            self._display_command_help(args[0], shell)
+            self._display_command_help(self.topic, shell)
         
         return True
     
@@ -76,12 +82,10 @@ class HelpCommand(BaseCommand):
             print(cmd.get_help())
         else:
             print(f"Unknown command: {cmd_name}")
-    
-    def get_help(self):
-        return """
-Display help information for commands.
 
-Usage:
-  help           - Show list of all available commands
-  help <command> - Show detailed help for <command>
-"""
+
+# Registering an alias for the help command ('?')
+@command(name="?")
+class HelpAliasCommand(HelpCommand):
+    """Alias for the help command."""
+    pass

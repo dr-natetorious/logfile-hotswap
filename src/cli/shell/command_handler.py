@@ -8,10 +8,18 @@ import inspect
 # Import the base command
 from commands.base import BaseCommand
 
+# Import declarative command support
+try:
+    from commands.declarative import DeclarativeCommand, CommandRegistry
+    DECLARATIVE_AVAILABLE = True
+except ImportError:
+    DECLARATIVE_AVAILABLE = False
+
 
 class CommandHandler:
     """
     Handles command registration, discovery, and execution.
+    Supports both traditional BaseCommand classes and DeclarativeCommand classes.
     """
     
     def __init__(self):
@@ -27,15 +35,24 @@ class CommandHandler:
         
         # Find all modules in the commands package
         for _, name, is_pkg in pkgutil.iter_modules(commands.__path__):
-            if not is_pkg and name != 'base':  # Skip base.py and packages
+            if not is_pkg and name not in ['base', 'declarative']:  # Skip base/infrastructure modules
                 module = import_module(f'commands.{name}')
                 
                 # Find all classes in the module that inherit from BaseCommand
                 for _, obj in inspect.getmembers(module, inspect.isclass):
-                    if issubclass(obj, BaseCommand) and obj != BaseCommand:
+                    if (issubclass(obj, BaseCommand) and 
+                    obj != BaseCommand and 
+                    not inspect.isabstract(obj)):
                         cmd_instance = obj()
                         for cmd_name in cmd_instance.get_command_names():
                             self.commands[cmd_name] = cmd_instance
+        
+        # Register declarative commands if available
+        if DECLARATIVE_AVAILABLE:
+            for name, cmd_class in CommandRegistry.get_all_commands().items():
+                # Create an instance
+                cmd_instance = cmd_class()
+                self.commands[name] = cmd_instance
         
         # Also register commands from the __init__.py if it has a register_commands function
         if hasattr(commands, 'register_commands'):
@@ -65,7 +82,25 @@ class CommandHandler:
             shell: The shell instance
         """
         if command_name in self.commands:
-            return self.commands[command_name].execute(command_name, args, shell)
+            cmd = self.commands[command_name]
+            
+            # Handle declarative commands differently
+            if DECLARATIVE_AVAILABLE and isinstance(cmd, DeclarativeCommand):
+                try:
+                    # Create a properly-configured instance from the args
+                    cmd_class = cmd.__class__
+                    instance = cmd_class.parse(args)
+                    
+                    # Execute the instance
+                    return instance.execute_command(shell)
+                except ValueError as e:
+                    # Show usage if we get a value error
+                    print(f"Error: {e}")
+                    print(f"\n{cmd.__class__.get_help()}")
+                    return False
+            else:
+                # Execute traditional command
+                return cmd.execute(command_name, args, shell)
         else:
             print(f"Unknown command: {command_name}")
             print('Type "help" for a list of available commands')

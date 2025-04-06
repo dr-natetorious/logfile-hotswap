@@ -1,40 +1,22 @@
 """
 Commands for managing systems in the configuration store.
 """
-import shlex
 import json
 from typing import List, Optional, Dict, Any, Set
-from .base import BaseCommand
-from prompt_toolkit.completion import Completion
+from pathlib import Path
+
+from .declarative import DeclarativeCommand, command
 from shell.exceptions import ServerNotFoundError, ServerAlreadyExistsError, ServerConnectionError
 
 
-class SystemCommand(BaseCommand):
+@command(name="systems")
+class ListSystemsCommand(DeclarativeCommand):
     """
-    Commands for system management operations.
+    List all configured systems.
     """
     
-    def get_command_names(self):
-        return ['systems', 'add-system', 'remove-system', 'find-systems', 'show-system']
-    
-    def execute(self, command_name, args_str, shell):
-        if command_name == 'systems':
-            return self._list_systems(args_str, shell)
-        elif command_name == 'add-system':
-            return self._add_system(args_str, shell)
-        elif command_name == 'remove-system':
-            return self._remove_system(args_str, shell)
-        elif command_name == 'find-systems':
-            return self._find_systems(args_str, shell)
-        elif command_name == 'show-system':
-            return self._show_system(args_str, shell)
-        
-        return False
-    
-    def _list_systems(self, args_str, shell):
+    def execute_command(self, shell) -> bool:
         """List all systems."""
-        args = self.parse_args(args_str)
-        
         # Get all systems
         systems = shell.config_store.systems.values()
         
@@ -59,108 +41,91 @@ class SystemCommand(BaseCommand):
             print(f"  Roles: {roles}")
         
         return True
+
+
+@command(name="add-system")
+class AddSystemCommand(DeclarativeCommand):
+    """
+    Add a new system to the configuration.
+    """
+    name: str
+    hostname: str
+    port: int = 22
+    description: Optional[str] = None
     
-    def _add_system(self, args_str, shell):
+    def execute_command(self, shell) -> bool:
         """Add a new system."""
-        args = self.parse_args(args_str)
-        
-        if len(args) < 2:
-            print("Error: Missing required arguments")
-            print("Usage: add-system <name> <hostname> [port] [description]")
-            return False
-        
-        name = args[0]
-        hostname = args[1]
-        port = int(args[2]) if len(args) > 2 and args[2].isdigit() else 22
-        description = args[3] if len(args) > 3 else None
-        
         try:
             # Create the system
             system = shell.config_store_manager.create_system(
-                name=name,
-                hostname=hostname,
-                port=port,
-                description=description
+                name=self.name,
+                hostname=self.hostname,
+                port=self.port,
+                description=self.description
             )
             
-            print(f"System '{name}' added successfully")
-            print(f"Hostname: {hostname}:{port}")
-            if description:
-                print(f"Description: {description}")
+            print(f"System '{self.name}' added successfully")
+            print(f"Hostname: {self.hostname}:{self.port}")
+            if self.description:
+                print(f"Description: {self.description}")
             
             return True
         
         except ServerAlreadyExistsError:
-            print(f"Error: System '{name}' already exists")
+            print(f"Error: System '{self.name}' already exists")
             return False
         except Exception as e:
             print(f"Error adding system: {e}")
             return False
+
+
+@command(name="remove-system")
+class RemoveSystemCommand(DeclarativeCommand):
+    """
+    Remove a system from the configuration.
+    """
+    name: str
     
-    def _remove_system(self, args_str, shell):
+    def execute_command(self, shell) -> bool:
         """Remove a system."""
-        args = self.parse_args(args_str)
-        
-        if not args:
-            print("Error: System name required")
-            print("Usage: remove-system <name>")
-            return False
-        
-        name = args[0]
-        
         try:
             # Check if the system exists
-            if name not in shell.config_store.systems:
-                print(f"Error: System '{name}' not found")
+            if self.name not in shell.config_store.systems:
+                print(f"Error: System '{self.name}' not found")
                 return False
             
             # Remove the system
-            if shell.config_store.remove_system(name):
-                print(f"System '{name}' removed successfully")
+            if shell.config_store.remove_system(self.name):
+                print(f"System '{self.name}' removed successfully")
                 
                 return True
             else:
-                print(f"Error removing system '{name}'")
+                print(f"Error removing system '{self.name}'")
                 return False
         
         except Exception as e:
             print(f"Error removing system: {e}")
             return False
+
+
+@command(name="find-systems")
+class FindSystemsCommand(DeclarativeCommand):
+    """
+    Find systems matching criteria.
+    """
+    tags: Optional[str] = None  # Comma-separated list of tags
+    roles: Optional[str] = None  # Comma-separated list of roles
     
-    def _find_systems(self, args_str, shell):
+    def execute_command(self, shell) -> bool:
         """Find systems by tags and/or roles."""
-        args = self.parse_args(args_str)
-        
-        # Parse options
-        tags = set()
-        roles = set()
-        
-        i = 0
-        while i < len(args):
-            arg = args[i]
-            if arg == '--tags' or arg == '-t':
-                if i + 1 < len(args):
-                    tags.update(args[i + 1].split(','))
-                    i += 2
-                else:
-                    print("Error: Missing tag names after --tags")
-                    return False
-            elif arg == '--roles' or arg == '-r':
-                if i + 1 < len(args):
-                    roles.update(args[i + 1].split(','))
-                    i += 2
-                else:
-                    print("Error: Missing role names after --roles")
-                    return False
-            else:
-                print(f"Error: Unknown option: {arg}")
-                print("Usage: find-systems [--tags tag1,tag2] [--roles role1,role2]")
-                return False
+        # Parse tags and roles into sets
+        tag_set = set(self.tags.split(',')) if self.tags else set()
+        role_set = set(self.roles.split(',')) if self.roles else set()
         
         # If no filters provided, show usage
-        if not tags and not roles:
+        if not tag_set and not role_set:
             print("Error: No search criteria provided")
-            print("Usage: find-systems [--tags tag1,tag2] [--roles role1,role2]")
+            print("Usage: find-systems --tags=tag1,tag2 --roles=role1,role2")
             return False
         
         # Find matching systems
@@ -168,11 +133,11 @@ class SystemCommand(BaseCommand):
         
         for system in shell.config_store.systems.values():
             # Check tags
-            if tags and not tags.issubset(system.tags):
+            if tag_set and not tag_set.issubset(system.tags):
                 continue
             
             # Check roles
-            if roles and not all(role in system.roles for role in roles):
+            if role_set and not all(role in system.roles for role in role_set):
                 continue
             
             matching_systems.append(system)
@@ -198,24 +163,23 @@ class SystemCommand(BaseCommand):
             print(f"  Roles: {sys_roles}")
         
         return True
+
+
+@command(name="show-system")
+class ShowSystemCommand(DeclarativeCommand):
+    """
+    Show detailed information about a system.
+    """
+    name: str
     
-    def _show_system(self, args_str, shell):
+    def execute_command(self, shell) -> bool:
         """Show detailed information about a system."""
-        args = self.parse_args(args_str)
-        
-        if not args:
-            print("Error: System name required")
-            print("Usage: show-system <name>")
-            return False
-        
-        name = args[0]
-        
         try:
             # Get the system
-            system = shell.config_store.get_system(name)
+            system = shell.config_store.get_system(self.name)
             
             if not system:
-                print(f"Error: System '{name}' not found")
+                print(f"Error: System '{self.name}' not found")
                 return False
             
             # Display system details
@@ -269,45 +233,3 @@ class SystemCommand(BaseCommand):
         except Exception as e:
             print(f"Error showing system: {e}")
             return False
-    
-    def get_completions(self, text):
-        """
-        Provide completions for system commands.
-        """
-        words = text.strip().split()
-        
-        if not words:
-            return
-        
-        last_word = words[-1].lower()
-        
-        # TODO: Implement completions for system names, tags, roles, etc.
-        # This would need access to the shell instance to get the real data
-    
-    def get_help(self):
-        return """
-System management commands.
-
-Usage:
-  systems              - List all configured systems
-  
-  add-system <name> <hostname> [port] [description]
-                       - Add a new system to the configuration
-                       
-  remove-system <name> - Remove a system from the configuration
-  
-  find-systems [options]
-                       - Find systems matching criteria
-    Options:
-      --tags, -t <tags>   - Comma-separated list of tags to match (all must match)
-      --roles, -r <roles> - Comma-separated list of roles to match (all must match)
-      
-  show-system <name>   - Show detailed information about a system
-
-Examples:
-  systems
-  add-system webserver web01.example.com 22 "Web server"
-  remove-system oldserver
-  find-systems --tags production,web --roles web_server
-  show-system dbserver
-"""

@@ -1,54 +1,40 @@
 """
-Commands for managing configuration files.
+Commands for managing configuration files using the declarative approach.
 """
 import os
-import shlex
-from .base import BaseCommand
-from prompt_toolkit.completion import Completion
+from pathlib import Path
+from typing import Optional
 
+from .declarative import DeclarativeCommand, command
 
-class ConfigCommand(BaseCommand):
+@command(name="config")
+class ConfigCommand(DeclarativeCommand):
     """
-    Commands for loading and saving configuration files.
+    Show current configuration path.
     """
     
-    def get_command_names(self):
-        return ['config', 'load-config', 'save-config']
-    
-    def execute(self, command_name, args_str, shell):
-        if command_name == 'config':
-            return self._show_config(args_str, shell)
-        elif command_name == 'load-config':
-            return self._load_config(args_str, shell)
-        elif command_name == 'save-config':
-            return self._save_config(args_str, shell)
-        
-        return False
-    
-    def _show_config(self, args_str, shell):
+    def execute_command(self, shell) -> bool:
         """Show current configuration path."""
         print(f"Current configuration path: {shell.config_store_manager.config_path}")
         return True
+
+@command(name="load-config")
+class LoadConfigCommand(DeclarativeCommand):
+    """
+    Load configuration from a file.
+    """
+    config_path: Path
     
-    def _load_config(self, args_str, shell):
+    def execute_command(self, shell) -> bool:
         """Load configuration from a file."""
-        args = self.parse_args(args_str)
-        
-        if not args:
-            print("Error: Config file path required")
-            print("Usage: load-config <path>")
-            return False
-        
-        config_path = os.path.expanduser(args[0])
-        
         # Check if file exists
-        if not os.path.exists(config_path):
-            print(f"Error: Config file not found: {config_path}")
+        if not self.config_path.exists():
+            print(f"Error: Config file not found: {self.config_path}")
             return False
         
         try:
             # Update config path
-            shell.config_store_manager.config_path = config_path
+            shell.config_store_manager.config_path = str(self.config_path)
             
             # Load the configuration
             shell.config_store = shell.config_store_manager._load_configuration()
@@ -56,7 +42,7 @@ class ConfigCommand(BaseCommand):
             # Update the discovery coordinator to use the new config store
             shell.discovery_coordinator.config_store = shell.config_store
             
-            print(f"Configuration loaded from: {config_path}")
+            print(f"Configuration loaded from: {self.config_path}")
             print(f"Systems: {len(shell.config_store.systems)}")
             print(f"Global settings: {len(shell.config_store.global_settings)}")
             
@@ -64,23 +50,26 @@ class ConfigCommand(BaseCommand):
         except Exception as e:
             print(f"Error loading configuration: {e}")
             return False
+
+
+@command(name="save-config")
+class SaveConfigCommand(DeclarativeCommand):
+    """
+    Save configuration to a file.
+    """
+    config_path: Optional[Path] = None
     
-    def _save_config(self, args_str, shell):
+    def execute_command(self, shell) -> bool:
         """Save configuration to a file."""
-        args = self.parse_args(args_str)
-        
-        if args:
+        if self.config_path:
             # Save to specified path
-            config_path = os.path.expanduser(args[0])
-            
-            # Update config path
             original_path = shell.config_store_manager.config_path
-            shell.config_store_manager.config_path = config_path
+            shell.config_store_manager.config_path = str(self.config_path)
             
             try:
                 # Save configuration
                 shell.config_store_manager.save_configuration()
-                print(f"Configuration saved to: {config_path}")
+                print(f"Configuration saved to: {self.config_path}")
                 return True
             except Exception as e:
                 print(f"Error saving configuration: {e}")
@@ -96,32 +85,3 @@ class ConfigCommand(BaseCommand):
             except Exception as e:
                 print(f"Error saving configuration: {e}")
                 return False
-    
-    def get_completions(self, text):
-        """
-        Provide completions for config commands.
-        """
-        if text.startswith("./") or text.startswith("/") or text.startswith("~"):
-            # Path completion
-            # This would be improved with actual path completion in a real implementation
-            return
-    
-    def get_help(self):
-        return """
-Configuration file management commands.
-
-Usage:
-  config              - Show current configuration path
-  
-  load-config <path>  - Load configuration from a file
-                        This replaces the current configuration with the loaded one
-                        
-  save-config [path]  - Save configuration to a file
-                        If path is not specified, saves to the current config path
-
-Examples:
-  config
-  load-config ~/.server_shell/production.json
-  save-config ~/.server_shell/backup.json
-  save-config
-"""

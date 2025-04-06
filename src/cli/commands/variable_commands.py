@@ -1,74 +1,55 @@
 """
-Commands for managing shell variables.
+Commands for managing shell variables using the declarative approach.
 """
 import re
-from .base import BaseCommand
+from typing import Optional, List, Dict, Any
 from prompt_toolkit.completion import Completion
+from .declarative import DeclarativeCommand, command
 
-
-class VariableCommand(BaseCommand):
+@command(name="set")
+class SetVariableCommand(DeclarativeCommand):
     """
-    Commands for setting, getting, and listing variables.
+    Set a variable to a value from a Python expression.
     """
+    name: str
+    expression: str
     
-    def get_command_names(self):
-        return ['set', 'unset', 'vars', 'echo', 'expr']
-    
-    def execute(self, command_name, args_str, shell):
-        if command_name == 'set':
-            return self._set_variable(args_str, shell)
-        elif command_name == 'unset':
-            return self._unset_variable(args_str, shell)
-        elif command_name == 'vars':
-            return self._list_variables(shell)
-        elif command_name == 'echo':
-            return self._echo_with_vars(args_str, shell)
-        elif command_name == 'expr':
-            return self._execute_expr(args_str, shell)
-        
-        return False
-    
-    def _set_variable(self, args_str, shell):
+    def execute_command(self, shell) -> bool:
         """Set a variable to a value."""
-        # Skip leading/trailing whitespace
-        args_str = args_str.strip()
-        
-        # Check for assignment pattern
-        match = re.match(r'^([a-zA-Z_][a-zA-Z0-9_]*)\s+(.+)$', args_str)
-        
-        if not match:
-            print("Error: Invalid variable assignment")
-            print("Usage: set variable_name expression")
-            print("Example: set servers ['server1', 'server2']")
-            return False
-        
-        var_name, value_expr = match.groups()
-        
         try:
-            value = shell.variable_manager.set(var_name, value_expr)
-            print(f"Set {var_name} = {value!r}")
+            value = shell.variable_manager.set(self.name, self.expression)
+            print(f"Set {self.name} = {value!r}")
             return True
         except (SyntaxError, ValueError) as e:
             print(f"Error: {e}")
             return False
+
+
+@command(name="unset")
+class UnsetVariableCommand(DeclarativeCommand):
+    """
+    Delete a variable.
+    """
+    name: str
     
-    def _unset_variable(self, args_str, shell):
+    def execute_command(self, shell) -> bool:
         """Delete a variable."""
-        var_name = args_str.strip()
-        
-        if not var_name:
-            print("Error: Variable name required")
-            print("Usage: unset variable_name")
-            return False
-        
-        if shell.variable_manager.delete(var_name):
-            print(f"Deleted variable: {var_name}")
+        if shell.variable_manager.delete(self.name):
+            print(f"Deleted variable: {self.name}")
             return True
         else:
-            print(f"Variable not found: {var_name}")
+            print(f"Variable not found: {self.name}")
             return False
+
+
+@command(name="vars")
+class ListVariablesCommand(DeclarativeCommand):
+    """
+    List all variables and their values.
+    """
+    verbose: bool = False
     
-    def _list_variables(self, shell):
+    def execute_command(self, shell) -> bool:
         """List all variables and their values."""
         variables = shell.variable_manager.list_variables()
         
@@ -79,70 +60,97 @@ class VariableCommand(BaseCommand):
         print("Variables:")
         for name, value in sorted(variables.items()):
             # Format the output based on the variable type
-            if isinstance(value, (list, dict, tuple, set)):
-                print(f"  {name} = {value!r}")
+            if self.verbose:
+                # Show type information in verbose mode
+                type_info = type(value).__name__
+                if isinstance(value, (list, dict, tuple, set)):
+                    print(f"  {name} ({type_info}) = {value!r}")
+                else:
+                    print(f"  {name} ({type_info}) = {value}")
             else:
-                print(f"  {name} = {value}")
+                # Normal output
+                if isinstance(value, (list, dict, tuple, set)):
+                    print(f"  {name} = {value!r}")
+                else:
+                    print(f"  {name} = {value}")
         
         return True
+
+
+@command(name="echo")
+class EchoCommand(DeclarativeCommand):
+    """
+    Echo text with variable expansion.
+    Variables can be referenced with $name or ${name}.
+    Nested properties with ${name.property}.
+    """
+    text: Optional[str] = None
+    no_newline: bool = False
     
-    def _echo_with_vars(self, args_str, shell):
+    def execute_command(self, shell) -> bool:
         """Echo text with variable expansion."""
-        if not args_str:
-            print()
+        if self.text is None:
+            print(end="" if self.no_newline else "\n")
             return True
         
         # Expand variables in the text
-        expanded_text = shell.variable_manager.expand_variables(args_str)
-        print(expanded_text)
-        return True
+        expanded_text = shell.variable_manager.expand_variables(self.text)
         
-    def _execute_expr(self, expr_str, shell):
-        """Execute a Python expression."""
-        if not expr_str.strip():
-            print("Error: Expression required")
-            print("Usage: expr <python_expression>")
-            return False
+        # Print with or without a newline
+        if self.no_newline:
+            print(expanded_text, end="")
+        else:
+            print(expanded_text)
             
+        return True
+
+
+@command(name="expr")
+class ExprCommand(DeclarativeCommand):
+    """
+    Execute a Python expression with variable expansion.
+    """
+    expression: str
+    
+    def execute_command(self, shell) -> bool:
+        """Execute a Python expression."""
         try:
-            result = shell.variable_manager.execute(expr_str)
+            result = shell.variable_manager.execute(self.expression)
             if result is not None:
                 print(repr(result))
             return True
         except (SyntaxError, ValueError) as e:
             print(f"Error: {e}")
             return False
-    
-    def get_completions(self, text):
-        """
-        Provide completions for variable commands.
-        This would be populated from actual variables in the shell.
-        """
-        # This method would need to access the shell's variable_manager
-        # We'll implement a basic version here
-        yield Completion('servers', start_position=0, display='servers')
-        yield Completion('paths', start_position=0, display='paths')
-        yield Completion('cleanup_days', start_position=0, display='cleanup_days')
-        yield Completion('verbose', start_position=0, display='verbose')
-    
-    def get_help(self):
-        return """
-Variable management commands.
 
-Usage:
-  set <name> <expression>   - Set a variable to the result of a Python expression
-                              Example: set servers ['server1', 'server2']
-                              Example: set paths {"log": "/var/log", "temp": "/tmp"}
-                              
-  unset <name>              - Delete a variable
-  
-  vars                      - List all variables and their values
-  
-  echo <text>               - Print text with variable expansion
-                              Variables can be referenced with $name or ${name}
-                              Nested properties with ${name.property}
-                              Example: echo Server: $servers[0]
-                              Example: echo Log path: ${paths.log}
 
-Note: Variable expressions are evaluated as Python code with limited builtins.
-"""
+# This function helps with get_completions for variable-related commands
+def get_variable_completions(text: str, shell) -> List[str]:
+    """
+    Get completions for variable names.
+    """
+    if not shell or not hasattr(shell, 'variable_manager'):
+        # Fallback for testing
+        return ['servers', 'paths', 'cleanup_days', 'verbose']
+    
+    # Get actual variables from the shell
+    variables = shell.variable_manager.list_variables()
+    return list(variables.keys())
+    
+
+# Custom implementation for get_completions to handle variable completions
+def get_var_completions(self, text: str) -> List[Dict]:
+    """
+    Custom completion handler for variable commands.
+    """
+    # This would be populated from actual variables in the shell
+    # We'll implement a basic version here with the same completions as the original
+    completions = []
+    for var_name in ['servers', 'paths', 'cleanup_days', 'verbose']:
+        if var_name.startswith(text):
+            completions.append(Completion(var_name, start_position=-len(text), display=var_name))
+    return completions
+
+# Add custom completions to the command classes
+SetVariableCommand.get_completions = get_var_completions
+UnsetVariableCommand.get_completions = get_var_completions
