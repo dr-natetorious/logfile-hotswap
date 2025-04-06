@@ -4,7 +4,8 @@ Server navigation and management commands using the declarative approach.
 from typing import Optional, List
 from prompt_toolkit.completion import Completion
 
-from .declarative import DeclarativeCommand, command
+from .declarative import DeclarativeCommand, command, Parameter
+
 from shell.exceptions import ServerConnectionError
 
 
@@ -13,7 +14,7 @@ class ConnectCommand(DeclarativeCommand):
     """
     Connect to a server.
     """
-    server_name: str
+    server_name: str = Parameter(position=0, mandatory=True, help="The server name")
     
     def execute_command(self, shell) -> bool:
         """Connect to the specified server."""

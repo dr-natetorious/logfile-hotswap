@@ -1,11 +1,12 @@
 """
-Disk space analysis and cleanup commands using the declarative approach.
+Disk space analysis and cleanup commands using enhanced parameter style.
 """
 from pathlib import Path
 from typing import List, Optional
 
 from prompt_toolkit.completion import Completion
-from .declarative import DeclarativeCommand, command
+
+from .declarative import DeclarativeCommand, command, Parameter
 from shell.exceptions import DiskOperationError
 
 
@@ -14,7 +15,8 @@ class DiskUsageCommand(DeclarativeCommand):
     """
     Show disk usage information for a path.
     """
-    path: Path = Path("/")
+    path: Path = Parameter(position=0, mandatory=True,default=Path("/"), help="Path to the analyze")
+    human: bool = True
     
     def execute_command(self, shell) -> bool:
         """Show disk usage information."""
@@ -28,6 +30,8 @@ class DiskUsageCommand(DeclarativeCommand):
         
         try:
             print(f"Disk usage for {server}:{self.path}")
+            print(f"Human-readable format: {self.human}")
+            
             # In a real implementation, you would get actual disk usage
             # For demonstration, we'll use mock data
             print("Filesystem      Size  Used Avail Use% Mounted on")
@@ -87,6 +91,8 @@ class AnalyzeDiskCommand(DeclarativeCommand):
     """
     path: Path
     min_size: int = 100  # Minimum size in MB to report
+    depth: int = 2       # Directory depth for analysis
+    all: bool = False    # Show all directories regardless of size
     
     def execute_command(self, shell) -> bool:
         """Analyze disk usage for potential cleanup."""
@@ -100,7 +106,12 @@ class AnalyzeDiskCommand(DeclarativeCommand):
         
         try:
             print(f"Analyzing disk usage on {server}:{self.path}")
-            print(f"Reporting directories larger than {self.min_size}MB")
+            if not self.all:
+                print(f"Reporting directories larger than {self.min_size}MB")
+            else:
+                print("Reporting all directories regardless of size")
+                
+            print(f"Analyzing to a depth of {self.depth} levels")
             
             # In a real implementation, you would analyze disk usage here
             # For demonstration, we'll just print mock results
@@ -115,23 +126,3 @@ class AnalyzeDiskCommand(DeclarativeCommand):
             return True
         except Exception as e:
             raise DiskOperationError(f"Failed to analyze disk: {e}")
-
-
-# Custom completion function for common paths
-def get_path_completions(text: str):
-    """
-    Provide path completions for disk commands.
-    In a real implementation, this would use the actual filesystem.
-    """
-    common_paths = [
-        '/', '/var', '/var/log', '/tmp', '/opt', '/home',
-        '/var/log/application', '/var/cache'
-    ]
-    
-    for path in common_paths:
-        if path.startswith(text):
-            yield Completion(
-                path,
-                start_position=-len(text),
-                display=path
-            )

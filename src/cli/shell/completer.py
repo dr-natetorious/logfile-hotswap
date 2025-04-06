@@ -4,12 +4,8 @@ Custom command completer for the shell.
 import shlex
 from prompt_toolkit.completion import Completer, Completion
 
-# Import declarative command support if available
-try:
-    from commands.declarative import DeclarativeCommand
-    DECLARATIVE_AVAILABLE = True
-except ImportError:
-    DECLARATIVE_AVAILABLE = False
+# Import declarative command support
+from commands.declarative import DeclarativeCommand
 
 
 class ShellCompleter(Completer):
@@ -55,8 +51,8 @@ class ShellCompleter(Completer):
             if cmd in self.commands:
                 cmd_instance = self.commands[cmd]
                 
-                # Handle declarative commands differently
-                if DECLARATIVE_AVAILABLE and isinstance(cmd_instance, DeclarativeCommand):
+                # Handle declarative commands
+                if isinstance(cmd_instance, DeclarativeCommand):
                     yield from self._get_declarative_completions(cmd_instance, document, complete_event, args)
                 else:
                     # Traditional command completion
@@ -77,7 +73,7 @@ class ShellCompleter(Completer):
                     cmd_instance = self.commands[cmd_name]
                     
                     # Get description for display_meta if available
-                    if DECLARATIVE_AVAILABLE and isinstance(cmd_instance, DeclarativeCommand):
+                    if isinstance(cmd_instance, DeclarativeCommand):
                         display_meta = cmd_instance._command_description.split('\n')[0]
                     else:
                         display_meta = ""
@@ -142,8 +138,8 @@ class ShellCompleter(Completer):
         Returns:
             Generator of Completion objects
         """
-        # Get argument definitions
-        arg_defs = cmd_instance.__class__.get_argument_definitions()
+        # Get parameter definitions
+        param_defs = cmd_instance.__class__.get_parameter_definitions()
         
         # Parse the arguments so far
         try:
@@ -160,49 +156,72 @@ class ShellCompleter(Completer):
         else:
             current_arg = ""
         
-        # Get argument at this position
-        if arg_index < len(arg_defs):
-            arg_def = arg_defs[arg_index]
+        # Separate positional and named parameters
+        positional_params = sorted(
+            [param for param in param_defs if param.position is not None],
+            key=lambda param: param.position
+        )
+        
+        # Check if we're completing a parameter name
+        if current_arg.startswith('-'):
+            # Complete parameter names
+            for param_def in param_defs:
+                completion = param_def.get_param_completion(current_arg)
+                if completion:
+                    yield completion
+            return
+        
+        # Check if we're completing a value for a named parameter
+        if arg_index > 0 and arg_parts[arg_index-1].startswith('-'):
+            param_name = arg_parts[arg_index-1]
+            # Find parameter definition for this name
+            for param_def in param_defs:
+                if param_name in param_def.all_param_names:
+                    for completion in param_def.get_completions(current_arg):
+                        yield completion
+            return
+        
+        # Otherwise, we're completing a positional parameter or suggesting a named parameter
+        
+        # Count used positional parameters
+        used_positional = 0
+        for i, part in enumerate(arg_parts):
+            if not part.startswith('-') and (i == 0 or not arg_parts[i-1].startswith('-')):
+                used_positional += 1
+        
+        # If we have positional parameters available, suggest the next one
+        if used_positional < len(positional_params):
+            current_pos_param = positional_params[used_positional]
             
-            # Show argument type in completions
-            meta = f"{arg_def.type.__name__}"
-            if arg_def.required:
-                meta += " (required)"
-            else:
-                meta += f" (default: {arg_def.default})"
+            # If we're in the middle of typing, provide completions
+            if not args_str.endswith(" "):
+                for completion in current_pos_param.get_completions(current_arg):
+                    yield completion
             
-            # If it has completions, provide them
-            if arg_def.completer:
-                for completion in arg_def.completer.get_completions(document, complete_event):
-                    # Enhance with argument information
-                    yield Completion(
-                        completion.text,
-                        start_position=completion.start_position,
-                        display=completion.display or completion.text,
-                        display_meta=meta
-                    )
-            # Otherwise, just show what argument is expected
-            elif current_arg == "":
-                # Provide a hint about what argument is expected
+            # Otherwise, provide a hint for what parameter is expected
+            elif args_str.endswith(" ") or not arg_parts:
                 yield Completion(
                     "",
                     start_position=0,
-                    display=f"<{arg_def.name}>",
-                    display_meta=meta
+                    display=f"<{current_pos_param.name}>",
+                    display_meta=f"{current_pos_param.type.__name__} (positional parameter)"
                 )
-        else:
-            # All arguments provided - check if there are any more optional args
-            remaining_args = [
-                arg for i, arg in enumerate(arg_defs) 
-                if i >= arg_index and not arg.required
-            ]
-            
-            if remaining_args:
-                # Show what optional args are available
-                for arg in remaining_args:
+        
+        # Also suggest named parameters if we're not in the middle of typing
+        if args_str.endswith(" ") or not arg_parts:
+            for param_def in param_defs:
+                # Check if parameter name has been used
+                used = any(part in param_def.all_param_names for part in arg_parts)
+                if not used:
+                    meta = f"{param_def.type.__name__}"
+                    if not param_def.mandatory:
+                        meta += f" (default: {param_def.default})"
+                    if param_def.help_text:
+                        meta += f" - {param_def.help_text}"
+                    
                     yield Completion(
-                        "",
+                        param_def.param_name,
                         start_position=0,
-                        display=f"[{arg.name}]",
-                        display_meta=f"{arg.type.__name__} (optional)"
+                        display=param_def.param_name,
+                        display_meta=meta
                     )

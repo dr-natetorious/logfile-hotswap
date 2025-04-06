@@ -5,7 +5,8 @@ import json
 from typing import List, Optional, Dict, Any, Set
 from pathlib import Path
 
-from .declarative import DeclarativeCommand, command
+from .declarative import DeclarativeCommand, command, Parameter
+
 from shell.exceptions import ServerNotFoundError, ServerAlreadyExistsError, ServerConnectionError
 
 
@@ -48,8 +49,8 @@ class AddSystemCommand(DeclarativeCommand):
     """
     Add a new system to the configuration.
     """
-    name: str
-    hostname: str
+    hostname: str = Parameter(position=0, mandatory=True, help="The server name")
+    name: str = Parameter(position=1, mandatory=False, help="Optional friendly label")
     port: int = 22
     description: Optional[str] = None
     
@@ -84,7 +85,7 @@ class RemoveSystemCommand(DeclarativeCommand):
     """
     Remove a system from the configuration.
     """
-    name: str
+    name: str = Parameter(position=0, mandatory=True, help="The server name") 
     
     def execute_command(self, shell) -> bool:
         """Remove a system."""
@@ -97,7 +98,6 @@ class RemoveSystemCommand(DeclarativeCommand):
             # Remove the system
             if shell.config_store.remove_system(self.name):
                 print(f"System '{self.name}' removed successfully")
-                
                 return True
             else:
                 print(f"Error removing system '{self.name}'")
@@ -113,8 +113,8 @@ class FindSystemsCommand(DeclarativeCommand):
     """
     Find systems matching criteria.
     """
-    tags: Optional[str] = None  # Comma-separated list of tags
-    roles: Optional[str] = None  # Comma-separated list of roles
+    tags: Optional[List[str]] = None  # Comma-separated list of tags
+    roles: Optional[List[str]] = None  # Comma-separated list of roles
     
     def execute_command(self, shell) -> bool:
         """Find systems by tags and/or roles."""

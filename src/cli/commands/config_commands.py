@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from .declarative import DeclarativeCommand, command
+from .declarative import DeclarativeCommand, command, Parameter
 
 @command(name="config")
 class ConfigCommand(DeclarativeCommand):
@@ -23,7 +23,7 @@ class LoadConfigCommand(DeclarativeCommand):
     """
     Load configuration from a file.
     """
-    config_path: Path
+    config_path: Path = Parameter(position=0, mandatory=True, help="Path to the configuration file")
     
     def execute_command(self, shell) -> bool:
         """Load configuration from a file."""
@@ -57,7 +57,7 @@ class SaveConfigCommand(DeclarativeCommand):
     """
     Save configuration to a file.
     """
-    config_path: Optional[Path] = None
+    config_path: Path = Parameter(position=0, mandatory=True, help="Path to the configuration file")
     
     def execute_command(self, shell) -> bool:
         """Save configuration to a file."""

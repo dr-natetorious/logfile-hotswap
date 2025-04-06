@@ -1,18 +1,19 @@
 """
-Commands for managing shell variables using the declarative approach.
+Commands for managing shell variables using the Parameter class approach.
 """
 import re
 from typing import Optional, List, Dict, Any
-from prompt_toolkit.completion import Completion
-from .declarative import DeclarativeCommand, command
+
+from .declarative import DeclarativeCommand, command, Parameter
+
 
 @command(name="set")
 class SetVariableCommand(DeclarativeCommand):
     """
     Set a variable to a value from a Python expression.
     """
-    name: str
-    expression: str
+    name: str = Parameter(position=0, help="Name of the variable to set")
+    expression: str = Parameter(position=1, help="Python expression to evaluate")
     
     def execute_command(self, shell) -> bool:
         """Set a variable to a value."""
@@ -24,13 +25,12 @@ class SetVariableCommand(DeclarativeCommand):
             print(f"Error: {e}")
             return False
 
-
 @command(name="unset")
 class UnsetVariableCommand(DeclarativeCommand):
     """
     Delete a variable.
     """
-    name: str
+    name: str = Parameter(position=0, help="Name of the variable to delete")
     
     def execute_command(self, shell) -> bool:
         """Delete a variable."""
@@ -47,7 +47,7 @@ class ListVariablesCommand(DeclarativeCommand):
     """
     List all variables and their values.
     """
-    verbose: bool = False
+    verbose: bool = Parameter(False, help="Show detailed type information", aliases=["v", "detailed"])
     
     def execute_command(self, shell) -> bool:
         """List all variables and their values."""
@@ -84,8 +84,9 @@ class EchoCommand(DeclarativeCommand):
     Variables can be referenced with $name or ${name}.
     Nested properties with ${name.property}.
     """
-    text: Optional[str] = None
-    no_newline: bool = False
+    text: Optional[str] = Parameter(None, position=0, mandatory=False, 
+                                    help="Text to echo with variable expansion")
+    no_newline: bool = Parameter(False, help="Suppress trailing newline", aliases=["n"])
     
     def execute_command(self, shell) -> bool:
         """Echo text with variable expansion."""
@@ -110,7 +111,7 @@ class ExprCommand(DeclarativeCommand):
     """
     Execute a Python expression with variable expansion.
     """
-    expression: str
+    expression: str = Parameter(position=0, help="Python expression to evaluate")
     
     def execute_command(self, shell) -> bool:
         """Execute a Python expression."""
@@ -122,35 +123,3 @@ class ExprCommand(DeclarativeCommand):
         except (SyntaxError, ValueError) as e:
             print(f"Error: {e}")
             return False
-
-
-# This function helps with get_completions for variable-related commands
-def get_variable_completions(text: str, shell) -> List[str]:
-    """
-    Get completions for variable names.
-    """
-    if not shell or not hasattr(shell, 'variable_manager'):
-        # Fallback for testing
-        return ['servers', 'paths', 'cleanup_days', 'verbose']
-    
-    # Get actual variables from the shell
-    variables = shell.variable_manager.list_variables()
-    return list(variables.keys())
-    
-
-# Custom implementation for get_completions to handle variable completions
-def get_var_completions(self, text: str) -> List[Dict]:
-    """
-    Custom completion handler for variable commands.
-    """
-    # This would be populated from actual variables in the shell
-    # We'll implement a basic version here with the same completions as the original
-    completions = []
-    for var_name in ['servers', 'paths', 'cleanup_days', 'verbose']:
-        if var_name.startswith(text):
-            completions.append(Completion(var_name, start_position=-len(text), display=var_name))
-    return completions
-
-# Add custom completions to the command classes
-SetVariableCommand.get_completions = get_var_completions
-UnsetVariableCommand.get_completions = get_var_completions
