@@ -176,3 +176,4 @@ cython_debug/
 # Exclude the build output folder
 bin/**
 bazel-output/
+MODULE.bazel.lock

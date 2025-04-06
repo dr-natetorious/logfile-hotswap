@@ -9,8 +9,8 @@ build --repo_env=PYTHON_BIN_PATH=python3
 build --show_progress_rate_limit=5
 
 # Cache and output directories
-build --symlink_prefix=bazel-out/
-startup --output_user_root=bazel-output
+build --symlink_prefix=/tmp/bddazel-out/
+startup --output_user_root=/tmp/badddefzel-output
 
 # Allow the execution platform to include remote execution properties
 build --enable_platform_specific_config
