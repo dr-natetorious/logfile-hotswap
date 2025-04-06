@@ -96,7 +96,7 @@ class CommandHandler:
                 except ValueError as e:
                     # Show usage if we get a value error
                     print(f"Error: {e}")
-                    print(f"\n{cmd.__class__.get_help()}")
+                    print(f"\n{cmd.get_help()}")
                     return False
             else:
                 # Execute traditional command

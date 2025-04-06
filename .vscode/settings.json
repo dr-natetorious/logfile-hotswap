@@ -1,5 +1,11 @@
 {
     "files.associations": {
         "format": "cpp"
-    }
+    },
+    "python.testing.pytestArgs": [
+        "tests"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
+    "python.analysis.extraPaths": ["./src","./src/cli"]
 }
