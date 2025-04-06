@@ -24,7 +24,7 @@ echo "=== Starting Docker workflow ==="
 
 # Step 1: Build the Dockerfile
 echo "Step 1: Building Docker image from ${DOCKERFILE_PATH}..."
-if docker build -t ${IMAGE_NAME} -f ${DOCKERFILE_PATH} .; then
+if sudo docker build -t ${IMAGE_NAME} -f ${DOCKERFILE_PATH} .; then
     echo -e "${GREEN}✓ Docker image built successfully${NC}"
 else
     echo -e "${RED}✗ Docker image build failed${NC}"
@@ -33,7 +33,7 @@ fi
 
 # Step 2: Validate the build was successful
 echo "Step 2: Validating Docker image..."
-if docker image inspect ${IMAGE_NAME} > /dev/null 2>&1; then
+if sudo docker image inspect ${IMAGE_NAME} > /dev/null 2>&1; then
     echo -e "${GREEN}✓ Docker image validation successful${NC}"
 else
     echo -e "${RED}✗ Docker image validation failed${NC}"
@@ -48,9 +48,10 @@ echo -e "${GREEN}Container will be automatically removed when exited${NC}"
 echo -e "To exit the container, type '${GREEN}exit${NC}'"
 echo "=== Entering container shell ==="
 
-docker run --rm -it \
+sudo docker run --rm -it \
     --name ${CONTAINER_NAME} \
     -v ${MOUNT_PATH} \
+    --user $(id -u):$(id -g) \
     --entrypoint /bin/bash \
     ${IMAGE_NAME} 
 

@@ -1,32 +1,7 @@
-load("@rules_python//python:defs.bzl", "py_binary")
-
-package(default_visibility = ["//visibility:public"])
-
 py_binary(
     name = "hotswap",
-    srcs = glob(["*.py"]),
+    srcs = ["main.py"],
     main = "main.py",
-    # Dependencies removed to simplify
+    python_version = "PY3",
+    visibility = ["//visibility:public"],
 )
-
-# Create deployable file in the bin directory
-# genrule(
-#     name = "copy_to_bin",
-#     srcs = [":hotswap"],
-#     outs = ["bin_copy_complete"],
-#     cmd = """
-#         mkdir -p $(GENDIR)/../../bin
-#         cp $(location :hotswap) $(GENDIR)/../../bin/hotswap
-#         chmod +x $(GENDIR)/../../bin/hotswap
-#         touch $@
-#     """,
-# )
-
-# Group all targets for top-level build
-# filegroup(
-#     name = "everything",
-#     srcs = [
-#         ":hotswap",
-#         ":copy_to_bin",
-#     ],
-# )
