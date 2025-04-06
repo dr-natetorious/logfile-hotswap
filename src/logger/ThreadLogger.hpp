@@ -2,8 +2,9 @@
 
 #include <atomic>
 #include <mutex>
+#include <fstream>
 
-// Forward declarations for globals accessed in LoggerThread.cpp
+// Forward declarations for globals accessed in ThreadLogger.cpp
 namespace GlobalState {
     extern std::mutex& getFileMutex();
     extern std::ofstream& getLogFile();

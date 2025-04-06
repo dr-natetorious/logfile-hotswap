@@ -1,9 +1,12 @@
 #include "LoggerApp.hpp"
 #include <iostream>
 #include <fstream>
-#include <csignal>
+#include <mutex>  // Added missing mutex header
 #include <chrono>
+#include <thread> // For sleep functions
+#include <csignal>
 #include <random>
+#include <atomic>  // Added missing atomic header
 
 // Global variables with better encapsulation in anonymous namespace
 namespace {

@@ -5,7 +5,7 @@ CXXFLAGS = -Wall -Wextra -pthread -std=c++20
 
 # Ultra aggressive optimization and stripping for release
 ULTRA_RELEASE_FLAGS = -O3 -DNDEBUG -fomit-frame-pointer -ffunction-sections -fdata-sections \
-                      -fno-asynchronous-unwind-tables -fno-exceptions -fno-rtti \
+                      -fno-asynchronous-unwind-tables -fno-rtti \
                       -fvisibility=hidden -fvisibility-inlines-hidden \
                       -flto -fwhole-program -fno-stack-protector -fmerge-all-constants
 

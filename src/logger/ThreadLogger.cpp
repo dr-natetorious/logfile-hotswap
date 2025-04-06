@@ -1,10 +1,10 @@
-#include "LoggerThread.hpp"
+#include "ThreadLogger.hpp"
 #include <iostream>
 #include <fstream>
 #include <thread>
 #include <chrono>
-#include <format>
 #include <random>
+#include <format>  // C++20 format
 
 LoggerThread::LoggerThread(int id, int jitter_ms) 
     : thread_id_(id), jitter_ms_(jitter_ms), counter_(0) {}
