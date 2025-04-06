@@ -22,6 +22,26 @@ class ServerConnectionError(ShellException):
     pass
 
 
+class ServerNotFoundError(ShellException):
+    """Exception for when a server is not found."""
+    pass
+
+
+class ServerAlreadyExistsError(ShellException):
+    """Exception for when a server with the same name already exists."""
+    pass
+
+
+class ServerNotConnectedError(ServerConnectionError):
+    """Exception for when a server is not connected."""
+    pass
+
+
 class DiskOperationError(ShellException):
     """Exception for disk operation errors."""
+    pass
+
+
+class DiscoveryError(ShellException):
+    """Exception for discovery-related errors."""
     pass

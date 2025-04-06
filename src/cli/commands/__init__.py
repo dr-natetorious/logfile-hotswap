@@ -8,6 +8,9 @@ from .exit_command import ExitCommand
 from .server_commands import ServerCommand
 from .disk_commands import DiskCommand
 from .variable_commands import VariableCommand
+from .discovery_commands import DiscoveryCommand
+from .system_commands import SystemCommand
+from .config_commands import ConfigCommand
 
 # This function can be used to manually register commands
 def register_commands():
@@ -26,7 +29,10 @@ def register_commands():
         ExitCommand(),
         ServerCommand(),
         DiskCommand(),
-        VariableCommand()
+        VariableCommand(),
+        DiscoveryCommand(),
+        SystemCommand(),
+        ConfigCommand(),
     ]
     
     for cmd in commands_to_register:

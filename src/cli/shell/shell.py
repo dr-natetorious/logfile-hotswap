@@ -10,6 +10,8 @@ from .command_handler import CommandHandler
 from .completer import ShellCompleter
 from .exceptions import ShellExit
 from .variable_manager import VariableManager
+from targeting.config_store import ConfigStoreManager
+from discovery.coordinator import DiscoveryCoordinator
 
 
 class ServerShell:
@@ -23,6 +25,19 @@ class ServerShell:
         
         # Initialize the variable manager
         self.variable_manager = VariableManager()
+        
+        # Initialize the config store manager and store
+        self.config_store_manager = ConfigStoreManager(
+            config_path=self.config.get('config_path')
+        )
+        self.config_store = self.config_store_manager.get_store()
+        
+        # Initialize the discovery coordinator
+        self.discovery_coordinator = DiscoveryCoordinator(
+            self.config_store,
+            parallel=self.config.get('parallel_discovery', True),
+            max_workers=self.config.get('discovery_workers', 5)
+        )
         
         # Set up prompt session
         self.session = PromptSession(
