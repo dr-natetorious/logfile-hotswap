@@ -7,7 +7,6 @@ import builtins
 import typing as t
 from collections.abc import Mapping
 
-
 class VariableManager:
     """
     Manages variables for the shell, including setting, getting, and evaluating expressions.
@@ -60,11 +59,15 @@ class VariableManager:
             SyntaxError: If the expression is invalid
             ValueError: If the evaluation fails
         """
-        # Create a safe evaluation environment
+        # Create a safe evaluation environment with allowed built-ins
         eval_globals = {
             '__builtins__': {
-                name: getattr(builtins, name) for name in 
-                ['dict', 'list', 'tuple', 'set', 'int', 'float', 'str', 'bool', 'True', 'False', 'None']
+                'int': int, 'float': float, 'str': str, 'bool': bool,
+                'list': list, 'dict': dict, 'tuple': tuple, 'set': set,
+                'len': len, 'min': min, 'max': max, 'sum': sum,
+                'True': True, 'False': False, 'None': None,
+                'sorted': sorted, 'range': range, 'enumerate': enumerate,
+                'zip': zip, 'round': round, 'abs': abs, 'all': all, 'any': any
             }
         }
         
@@ -82,6 +85,47 @@ class VariableManager:
             self._variables[name] = value
             
             return value
+        except SyntaxError as e:
+            raise SyntaxError(f"Invalid expression: {e}")
+        except Exception as e:
+            raise ValueError(f"Failed to evaluate expression: {e}")
+    
+    def execute(self, expr: str) -> t.Any:
+        """
+        Execute a Python expression and return the result.
+        
+        Args:
+            expr: A Python expression to evaluate
+            
+        Returns:
+            The result of the expression
+            
+        Raises:
+            SyntaxError: If the expression is invalid
+            ValueError: If the evaluation fails
+        """
+        # Similar to set() but doesn't store the result
+        eval_globals = {
+            '__builtins__': {
+                'int': int, 'float': float, 'str': str, 'bool': bool,
+                'list': list, 'dict': dict, 'tuple': tuple, 'set': set,
+                'len': len, 'min': min, 'max': max, 'sum': sum,
+                'True': True, 'False': False, 'None': None,
+                'sorted': sorted, 'range': range, 'enumerate': enumerate,
+                'zip': zip, 'round': round, 'abs': abs, 'all': all, 'any': any
+            }
+        }
+        
+        # Add existing variables to the evaluation context
+        eval_locals = self._variables.copy()
+        
+        try:
+            # Parse the expression first to catch syntax errors
+            ast.parse(expr)
+            
+            # Evaluate the expression in the restricted environment
+            result = eval(expr, eval_globals, eval_locals)
+            return result
         except SyntaxError as e:
             raise SyntaxError(f"Invalid expression: {e}")
         except Exception as e:
@@ -118,7 +162,9 @@ class VariableManager:
         Supports:
         - $VarName
         - ${VarName}
-        - ${VarName.property} for nested access
+        - ${VarName.property}
+        - ${VarName.method()}
+        - ${function(VarName)}
         
         Args:
             text: The text containing variable references
@@ -126,42 +172,20 @@ class VariableManager:
         Returns:
             The text with variables expanded
         """
-        # Handle ${var.property} syntax for nested access
-        def replace_nested(match):
+        # Handle complex expressions like ${len(var)}, ${var.append(4)}, etc.
+        def replace_complex(match):
             expr = match.group(1)
             
-            # Handle nested properties with dot notation
-            if '.' in expr:
-                parts = expr.split('.')
-                var_name = parts[0]
-                var_value = self.get(var_name)
-                
-                if var_value is None:
-                    return f"${{{expr}}}"  # Return original if variable doesn't exist
-                
-                # Navigate the nested properties
-                for prop in parts[1:]:
-                    if isinstance(var_value, Mapping) and prop in var_value:
-                        var_value = var_value[prop]
-                    elif hasattr(var_value, prop):
-                        var_value = getattr(var_value, prop)
-                    elif isinstance(var_value, (list, tuple)) and prop.isdigit():
-                        index = int(prop)
-                        if 0 <= index < len(var_value):
-                            var_value = var_value[index]
-                        else:
-                            return f"${{{expr}}}"  # Return original if index out of range
-                    else:
-                        return f"${{{expr}}}"  # Return original if property doesn't exist
-                
-                return str(var_value)
-            else:
-                # Simple variable
-                var_value = self.get(expr)
-                return str(var_value) if var_value is not None else f"${{{expr}}}"
+            try:
+                # Directly evaluate the expression using execute()
+                result = self.execute(expr)
+                return str(result)
+            except Exception as e:
+                # If the expression fails, return the original text
+                return f"${{{expr}}}"
         
-        # Replace ${var.prop} pattern
-        text = re.sub(r'\${([^}]+)}', replace_nested, text)
+        # First replace ${expr} with results of evaluating expr
+        text = re.sub(r'\${([^}]+)}', replace_complex, text)
         
         # Handle $VarName syntax for simple variables
         def replace_simple(match):

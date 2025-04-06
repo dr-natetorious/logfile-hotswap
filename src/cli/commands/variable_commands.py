@@ -12,7 +12,7 @@ class VariableCommand(BaseCommand):
     """
     
     def get_command_names(self):
-        return ['set', 'unset', 'vars', 'echo']
+        return ['set', 'unset', 'vars', 'echo', 'expr']
     
     def execute(self, command_name, args_str, shell):
         if command_name == 'set':
@@ -23,6 +23,8 @@ class VariableCommand(BaseCommand):
             return self._list_variables(shell)
         elif command_name == 'echo':
             return self._echo_with_vars(args_str, shell)
+        elif command_name == 'expr':
+            return self._execute_expression(args_str, shell)
         
         return False
     
@@ -94,6 +96,15 @@ class VariableCommand(BaseCommand):
         expanded_text = shell.variable_manager.expand_variables(args_str)
         print(expanded_text)
         return True
+        
+    def _execute_expr(self, expr, shell):
+        """Execute an expression and return the result."""
+        try:
+            result = shell.variable_manager.execute(expr)
+            return result
+        except Exception as e:
+            print(f"Error evaluating expression: {e}")
+            return None
     
     def get_completions(self, text):
         """
