@@ -19,7 +19,6 @@ import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
-
 class FdHotSwap:
     """
     A class to handle file descriptor hot-swapping in running processes.
@@ -315,12 +314,12 @@ def main() -> int:
     """
     parser = argparse.ArgumentParser(
         description="Hot-swap a file descriptor in a running process.",
-        epilog="Example: %(prog)s 12345 /var/log/app/current.log /var/log/app/new.log"
+        epilog="Example: %(prog)s --pid 12345 --from /var/log/app/current.log --to /var/log/app/new.log"
     )
     
-    parser.add_argument("pid", type=int, help="Process ID of the target process")
-    parser.add_argument("old_path", type=str, help="Current log file path")
-    parser.add_argument("new_path", type=str, help="New log file path")
+    parser.add_argument("-p", "--pid", type=int, required=True, help="Process ID of the target process")
+    parser.add_argument("-f", "--from", dest="old_path", type=str, required=True, help="Current log file path")
+    parser.add_argument("-t", "--to", dest="new_path", type=str, required=True, help="New log file path")
     parser.add_argument("-q", "--quiet", action="store_true", help="Suppress detailed output")
     
     args = parser.parse_args()
