@@ -7,10 +7,10 @@ exports_files([
 ])
 
 # Add a filegroup that serves as a launcher for automated builds
-filegroup(
-    name = "all",
-    srcs = [
-        "//src/logger:all",
-        "//src/hotswap:all",
-    ],
-)
+# filegroup(
+#     name = "everything",
+#     srcs = [
+#         "//src/logger:everything",
+#         "//src/hotswap:everything",
+#     ],
+# )

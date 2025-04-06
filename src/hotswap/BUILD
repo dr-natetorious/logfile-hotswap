@@ -10,23 +10,23 @@ py_binary(
 )
 
 # Create deployable file in the bin directory
-genrule(
-    name = "copy_to_bin",
-    srcs = [":hotswap"],
-    outs = ["bin_copy_complete"],
-    cmd = """
-        mkdir -p $(GENDIR)/../../bin
-        cp $(location :hotswap) $(GENDIR)/../../bin/hotswap
-        chmod +x $(GENDIR)/../../bin/hotswap
-        touch $@
-    """,
-)
+# genrule(
+#     name = "copy_to_bin",
+#     srcs = [":hotswap"],
+#     outs = ["bin_copy_complete"],
+#     cmd = """
+#         mkdir -p $(GENDIR)/../../bin
+#         cp $(location :hotswap) $(GENDIR)/../../bin/hotswap
+#         chmod +x $(GENDIR)/../../bin/hotswap
+#         touch $@
+#     """,
+# )
 
 # Group all targets for top-level build
-filegroup(
-    name = "all",
-    srcs = [
-        ":hotswap",
-        ":copy_to_bin",
-    ],
-)
+# filegroup(
+#     name = "everything",
+#     srcs = [
+#         ":hotswap",
+#         ":copy_to_bin",
+#     ],
+# )
