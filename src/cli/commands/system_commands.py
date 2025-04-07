@@ -2,24 +2,24 @@
 Commands for managing systems in the configuration store.
 """
 import json
-from typing import List, Optional, Dict, Any, Set
+from typing import List, Optional, Dict, Any, Set, TYPE_CHECKING
 from pathlib import Path
-
 from .declarative import DeclarativeCommand, command, Parameter
-
 from shell.exceptions import ServerNotFoundError, ServerAlreadyExistsError, ServerConnectionError
 
+if TYPE_CHECKING:
+    from cli.shell.shell import ServerShell
 
-@command(name="systems")
+@command(name="list-systems")
 class ListSystemsCommand(DeclarativeCommand):
     """
     List all configured systems.
     """
     
-    def execute_command(self, shell) -> bool:
+    def execute_command(self, shell:'ServerShell') -> bool:
         """List all systems."""
         # Get all systems
-        systems = shell.config_store.systems.values()
+        systems = shell.config_store.list_systems()
         
         if not systems:
             print("No systems configured")
@@ -50,11 +50,11 @@ class AddSystemCommand(DeclarativeCommand):
     Add a new system to the configuration.
     """
     hostname: str = Parameter(position=0, mandatory=True, help="The server name")
-    name: str = Parameter(position=1, mandatory=False, help="Optional friendly label")
-    port: int = 22
-    description: Optional[str] = None
+    name: Optional[str] = Parameter(position=1, help="Optional friendly label")
+    port: int = Parameter(22, help="Service port for accessing this system")
+    description: Optional[str] = Parameter(help="Opaque description of the systems purpose.")
     
-    def execute_command(self, shell) -> bool:
+    def execute_command(self, shell:'ServerShell') -> bool:
         """Add a new system."""
         try:
             # Create the system
@@ -87,7 +87,7 @@ class RemoveSystemCommand(DeclarativeCommand):
     """
     name: str = Parameter(position=0, mandatory=True, help="The server name") 
     
-    def execute_command(self, shell) -> bool:
+    def execute_command(self, shell:'ServerShell') -> bool:
         """Remove a system."""
         try:
             # Check if the system exists
@@ -113,7 +113,7 @@ class FindSystemsCommand(DeclarativeCommand):
     """
     Find systems matching criteria.
     """
-    tags: Optional[List[str]] = None  # Comma-separated list of tags
+    tags: Optional[List[str]] = Parameter(help="List of tags")
     roles: Optional[List[str]] = None  # Comma-separated list of roles
     
     def execute_command(self, shell) -> bool:

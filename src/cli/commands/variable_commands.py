@@ -2,10 +2,11 @@
 Commands for managing shell variables using the Parameter class approach.
 """
 import re
-from typing import Optional, List, Dict, Any
-
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from .declarative import DeclarativeCommand, command, Parameter
 
+if TYPE_CHECKING:
+    from shell.shell import ServerShell
 
 @command(name="set")
 class SetVariableCommand(DeclarativeCommand):
@@ -15,7 +16,7 @@ class SetVariableCommand(DeclarativeCommand):
     name: str = Parameter(position=0, help="Name of the variable to set")
     expression: str = Parameter(position=1, help="Python expression to evaluate")
     
-    def execute_command(self, shell) -> bool:
+    def execute_command(self, shell:'ServerShell') -> bool:
         """Set a variable to a value."""
         try:
             value = shell.variable_manager.set(self.name, self.expression)
@@ -32,7 +33,7 @@ class UnsetVariableCommand(DeclarativeCommand):
     """
     name: str = Parameter(position=0, help="Name of the variable to delete")
     
-    def execute_command(self, shell) -> bool:
+    def execute_command(self, shell:'ServerShell') -> bool:
         """Delete a variable."""
         if shell.variable_manager.delete(self.name):
             print(f"Deleted variable: {self.name}")
@@ -49,7 +50,7 @@ class ListVariablesCommand(DeclarativeCommand):
     """
     verbose: bool = Parameter(False, help="Show detailed type information", aliases=["v", "detailed"])
     
-    def execute_command(self, shell) -> bool:
+    def execute_command(self, shell:'ServerShell') -> bool:
         """List all variables and their values."""
         variables = shell.variable_manager.list_variables()
         
@@ -75,7 +76,6 @@ class ListVariablesCommand(DeclarativeCommand):
                     print(f"  {name} = {value}")
         
         return True
-
 
 @command(name="echo")
 class EchoCommand(DeclarativeCommand):

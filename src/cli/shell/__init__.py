@@ -7,3 +7,4 @@ from .shell import ServerShell
 from .command_handler import CommandHandler
 from .completer import ShellCompleter
 from .exceptions import ShellException, ShellExit, CommandError
+from .variable_manager import VariableManager
