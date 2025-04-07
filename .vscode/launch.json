@@ -1,0 +1,12 @@
+{
+    "configurations": [
+        {
+            "name": "Debug: Hotswap",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./src/hotswap/main.py",
+            "console": "integratedTerminal",
+            "args": ["-f", "./bin/test.log", "-t","./bin/test2.log"]
+        }
+    ]
+}
