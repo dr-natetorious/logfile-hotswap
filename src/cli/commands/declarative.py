@@ -14,7 +14,7 @@ from prompt_toolkit.completion import Completion, PathCompleter, WordCompleter
 
 # Import BaseCommand for compatibility
 from .base import BaseCommand
-
+from utils.type_converter import TypeConverter
 
 def command(name=None, description=None):
     """
@@ -42,7 +42,7 @@ class Parameter:
             name: str = Parameter(position=0, help="Name parameter")
             verbose: bool = Parameter(False, help="Verbose mode")
     """
-    def __init__(self, default:Any=None, position:int=None, mandatory:bool=None, help:str=None, 
+    def __init__(self, default:Any=None, position:int=None, mandatory:bool=False, help:str=None, 
                  aliases:List[str]=None, validation=None):
         self.default = default
         self.position = position
@@ -81,9 +81,25 @@ class CommandRegistry:
 class ParameterDefinition:
     """Represents a command parameter with type information and metadata."""
     
-    def __init__(self, name: str, type_hint: Type, param_obj=None):
+    def __init__(
+        self, 
+        name: str, 
+        type_hint: Type, 
+        param_obj: Optional[Any] = None,
+        variable_manager: Optional[Any] = None
+    ):
+        """
+        Initialize a parameter definition.
+        
+        Args:
+            name: The name of the parameter
+            type_hint: The expected type of the parameter
+            param_obj: Additional parameter metadata or default value
+            variable_manager: Optional variable manager for expression evaluation
+        """
         self.name = name
         self.type = type_hint
+        self.variable_manager = variable_manager
         
         # Extract metadata from Parameter object if available
         if isinstance(param_obj, Parameter):
@@ -120,38 +136,87 @@ class ParameterDefinition:
     
     def _setup_completer(self):
         """Set up an appropriate completer based on the parameter type."""
-        if self.type == Path or getattr(self.type, "__origin__", None) == Union and Path in getattr(self.type, "__args__", []):
+        from prompt_toolkit.completion import PathCompleter, WordCompleter
+        
+        # Check for Path or Optional[Path]
+        origin = getattr(self.type, "__origin__", None)
+        args = getattr(self.type, "__args__", [])
+        
+        if (self.type == Path or 
+            (origin is Union and Path in args)):
             self.completer = PathCompleter()
         elif self.type == bool:
-            self.completer = WordCompleter(['true', 'false', 'yes', 'no', '1', '0'])
+            self.completer = WordCompleter([
+                'true', 'false', 'yes', 'no', '1', '0'
+            ])
     
-    def convert_value(self, value_str: str) -> Any:
-        """Convert string value to the correct type."""
+    def convert_value(self, value_str: Optional[str]) -> Any:
+        """
+        Convert string value to the correct type.
+        
+        Args:
+            value_str: The string value to convert
+        
+        Returns:
+            The converted value
+        
+        Raises:
+            ValueError: If conversion fails
+        """
+        # Handle empty or None values
+        if value_str is None or value_str == '':
+            # Return default if available
+            if self.default is not None:
+                return self.default
+            
+            # Raise error if mandatory
+            if self.mandatory:
+                raise ValueError(f"Parameter '{self.name}' is mandatory")
+            
+            return None
+        
+        # Special handling for boolean flags
+        if self.type == bool and not value_str:
+            return True
+        
+        # Prepare variable expansion and expression evaluation contexts
+        variable_expander = (
+            self.variable_manager.expand_variables 
+            if self.variable_manager else None
+        )
+        expression_evaluator = (
+            self.variable_manager.evaluate_expression 
+            if self.variable_manager else None
+        )
+        
         try:
-            if self.type == Path:
-                return Path(os.path.expanduser(value_str))
-            elif self.type == bool:
-                # For boolean flags, treat presence without value as True
-                if not value_str:
-                    return True
-                return value_str.lower() in ('yes', 'true', 't', 'y', '1')
-            else:
-                return self.type(value_str)
+            # Use TypeConverter with optional variable expansion
+            return TypeConverter.convert(
+                value_str, 
+                self.type,                 
+            )
         except ValueError as e:
-            raise ValueError(f"Cannot convert '{value_str}' to {self.type.__name__} for parameter '{self.name}': {e}")
+            raise ValueError(
+                f"Cannot convert '{value_str}' to {self.type.__name__} "
+                f"for parameter '{self.name}': {e}"
+            )
     
-    def get_completions(self, text: str) -> List[Completion]:
+    def get_completions(self, text: str) -> List[Any]:
         """Get completions for this parameter's value."""
         if self.completer:
             return list(self.completer.get_completions(text, 0))
         return []
     
-    def get_param_completion(self, text: str) -> Optional[Completion]:
+    def get_param_completion(self, text: str) -> Optional[Any]:
         """Get completion for the parameter name."""
+        from prompt_toolkit.completion import Completion
+        
         # Check if the text matches the parameter name or any aliases
         matching_params = [p for p in self.all_param_names if p.startswith(text)]
         if matching_params:
             param_name = matching_params[0]  # Use the first matching parameter name
+            
+            # Construct metadata
             meta = f"{self.type.__name__}"
             if not self.mandatory:
                 meta += f" (default: {self.default})"

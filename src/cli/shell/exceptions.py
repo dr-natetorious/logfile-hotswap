@@ -40,8 +40,3 @@ class ServerNotConnectedError(ServerConnectionError):
 class DiskOperationError(ShellException):
     """Exception for disk operation errors."""
     pass
-
-
-class DiscoveryError(ShellException):
-    """Exception for discovery-related errors."""
-    pass

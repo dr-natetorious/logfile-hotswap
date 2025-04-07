@@ -8,11 +8,13 @@ import inspect
 import concurrent.futures
 from typing import Dict, List, Set, Optional, Any
 
-from shell.exceptions import DiscoveryError
 from .base import DiscoveryPlugin
 
 logger = logging.getLogger(__name__)
 
+class DiscoveryError(Exception):
+    """Exception for discovery-related errors."""
+    pass
 
 class DiscoveryCoordinator:
     """

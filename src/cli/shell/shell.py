@@ -2,6 +2,7 @@
 Core shell implementation for the server management tool.
 """
 import sys
+import traceback
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
@@ -92,6 +93,7 @@ class ServerShell:
                 break
             except Exception as e:
                 print(f"Error: {e}")
+                traceback.print_exc()
     
     def process_command(self, user_input):
         """Process a command string."""

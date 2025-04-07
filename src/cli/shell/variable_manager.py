@@ -3,9 +3,9 @@ Variable manager for storing and evaluating shell variables.
 """
 import re
 import ast
-import builtins
 import typing as t
 from collections.abc import Mapping
+from utils.type_converter import TypeConverter
 
 class VariableManager:
     """
@@ -14,12 +14,11 @@ class VariableManager:
     
     def __init__(self):
         """Initialize the variable manager with default variables."""
-        self._variables = {}
+        self._variables: t.Dict[str, t.Any] = {}
         self._initialize_defaults()
     
     def _initialize_defaults(self):
         """Set up default variables."""
-        # You can add any default variables here
         self._variables = {
             'servers': ['server1', 'server2', 'production', 'staging'],
             'paths': {
@@ -31,36 +30,14 @@ class VariableManager:
             'verbose': False
         }
     
-    def get(self, name: str, default=None) -> t.Any:
+    def _create_safe_eval_context(self) -> t.Dict[str, t.Any]:
         """
-        Get a variable by name.
+        Create a safe evaluation environment with allowed built-ins.
         
-        Args:
-            name: The variable name
-            default: The default value if the variable doesn't exist
-            
         Returns:
-            The variable value or default
+            A dictionary of safe global variables for evaluation
         """
-        return self._variables.get(name, default)
-    
-    def set(self, name: str, value_expr: str) -> t.Any:
-        """
-        Set a variable to the result of evaluating a Python expression.
-        
-        Args:
-            name: The variable name
-            value_expr: A Python expression to evaluate
-            
-        Returns:
-            The evaluated value
-        
-        Raises:
-            SyntaxError: If the expression is invalid
-            ValueError: If the evaluation fails
-        """
-        # Create a safe evaluation environment with allowed built-ins
-        eval_globals = {
+        return {
             '__builtins__': {
                 'int': int, 'float': float, 'str': str, 'bool': bool,
                 'list': list, 'dict': dict, 'tuple': tuple, 'set': set,
@@ -70,29 +47,81 @@ class VariableManager:
                 'zip': zip, 'round': round, 'abs': abs, 'all': all, 'any': any
             }
         }
-        
-        # Add existing variables to the evaluation context
-        eval_locals = self._variables.copy()
-        
-        try:
-            # Parse the expression first to catch syntax errors
-            ast.parse(value_expr)
-            
-            # Evaluate the expression in the restricted environment
-            value = eval(value_expr, eval_globals, eval_locals)
-            
-            # Store the result
-            self._variables[name] = value
-            
-            return value
-        except SyntaxError as e:
-            raise SyntaxError(f"Invalid expression: {e}")
-        except Exception as e:
-            raise ValueError(f"Failed to evaluate expression: {e}")
     
-    def execute(self, expr: str) -> t.Any:
+    def get(self, name: str, default: t.Any = None, type_hint: t.Optional[t.Type] = None) -> t.Any:
         """
-        Execute a Python expression and return the result.
+        Get a variable by name, with optional type conversion.
+        
+        Args:
+            name: The variable name
+            default: The default value if the variable doesn't exist
+            type_hint: Optional type to convert the value to
+            
+        Returns:
+            The variable value, optionally converted to the specified type
+        """
+        value = self._variables.get(name, default)
+        
+        # Apply type conversion if type_hint is provided
+        if type_hint is not None:
+            try:
+                return TypeConverter.convert(value, type_hint)
+            except ValueError:
+                # If conversion fails, return the original value
+                return value
+        
+        return value
+    
+    def set(
+        self, 
+        name: str, 
+        value_expr: str, 
+        type_hint: t.Optional[t.Type] = None
+    ) -> t.Any:
+        """
+        Set a variable to the result of evaluating a Python expression.
+        
+        Args:
+            name: The variable name
+            value_expr: A Python expression to evaluate
+            type_hint: Optional type to validate the result against
+            
+        Returns:
+            The evaluated value
+        
+        Raises:
+            SyntaxError: If the expression is invalid
+            ValueError: If the evaluation fails or type validation fails
+        """
+        # First, evaluate the expression
+        value = self.evaluate_expression(value_expr)
+        
+        # If type_hint is provided, validate the value
+        if type_hint is not None:
+            try:
+                # Attempt to convert/validate the value
+                value = TypeConverter.convert(value, type_hint)
+            except ValueError as e:
+                # If direct conversion fails, try some fallback strategies
+                if isinstance(value, str):
+                    try:
+                        # Try converting the string directly
+                        converted_value = TypeConverter.convert(value, type_hint)
+                        value = converted_value
+                    except ValueError:
+                        # If all conversion attempts fail, raise the original error
+                        raise ValueError(f"Cannot convert value to {type_hint.__name__}: {e}")
+                else:
+                    # If not a string and conversion fails, raise the error
+                    raise ValueError(f"Cannot convert value to {type_hint.__name__}: {e}")
+        
+        # Store the result
+        self._variables[name] = value        
+        return value
+    
+    def evaluate_expression(self, expr: str) -> t.Any:
+        """
+        Evaluate a Python expression and return the result.
         
         Args:
             expr: A Python expression to evaluate
@@ -104,17 +133,8 @@ class VariableManager:
             SyntaxError: If the expression is invalid
             ValueError: If the evaluation fails
         """
-        # Similar to set() but doesn't store the result
-        eval_globals = {
-            '__builtins__': {
-                'int': int, 'float': float, 'str': str, 'bool': bool,
-                'list': list, 'dict': dict, 'tuple': tuple, 'set': set,
-                'len': len, 'min': min, 'max': max, 'sum': sum,
-                'True': True, 'False': False, 'None': None,
-                'sorted': sorted, 'range': range, 'enumerate': enumerate,
-                'zip': zip, 'round': round, 'abs': abs, 'all': all, 'any': any
-            }
-        }
+        # Create a safe evaluation environment
+        eval_globals = self._create_safe_eval_context()
         
         # Add existing variables to the evaluation context
         eval_locals = self._variables.copy()
@@ -177,10 +197,10 @@ class VariableManager:
             expr = match.group(1)
             
             try:
-                # Directly evaluate the expression using execute()
-                result = self.execute(expr)
+                # Directly evaluate the expression
+                result = self.evaluate_expression(expr)
                 return str(result)
-            except Exception as e:
+            except Exception:
                 # If the expression fails, return the original text
                 return f"${{{expr}}}"
         
@@ -197,3 +217,45 @@ class VariableManager:
         text = re.sub(r'(?<!\\)\$([a-zA-Z_][a-zA-Z0-9_]*)(?!\{)', replace_simple, text)
         
         return text
+    
+    def get_typed(self, name: str, type_hint: t.Type, default: t.Any = None) -> t.Any:
+        """
+        Get a variable with specific type conversion.
+        
+        Args:
+            name: The variable name
+            type_hint: The type to convert the value to
+            default: The default value if the variable doesn't exist
+            
+        Returns:
+            The variable value converted to the specified type
+        """
+        value = self.get(name, default)
+        return TypeConverter.convert(value, type_hint)
+
+# Example usage
+def example():
+    # Create a variable manager
+    vm = VariableManager()
+    
+    # Set variables using evaluation
+    vm.set('ports', '[8080, 8081, 8082]')
+    vm.set('debug', 'True')
+    
+    # Evaluate expressions
+    max_port = vm.evaluate_expression('max(ports)')
+    
+    # Get variables with type conversion
+    ports = vm.get_typed('ports', t.List[int])
+    is_debug = vm.get_typed('debug', bool)
+    
+    print(f"Ports: {ports}")
+    print(f"Max Port: {max_port}")
+    print(f"Debug mode: {is_debug}")
+    
+    # Expand variables in a string
+    expanded = vm.expand_variables('Server is running on port ${ports[0]}')
+    print(f"Expanded: {expanded}")
+
+if __name__ == '__main__':
+    example()
