@@ -3,7 +3,7 @@ Data models for the system targeting and configuration.
 """
 from enum import Enum
 from typing import Dict, List, Optional, Set, Any, Union, Callable
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 class ConnectionStatus(str, Enum):
     """Enum representing the connection status of a system."""
@@ -66,11 +66,18 @@ class ServerEndpoint(BaseModel):
     connection_status: ConnectionStatus = ConnectionStatus.DISCONNECTED
     last_connected: Optional[str] = None
     error_message: Optional[str] = None
+    agent: Optional[Any] = None  # Can't use RemoteAgent directly due to circular import
     
-    def get_agent(self)->Optional[RemoteAgent]:
-        return None
+    def get_agent(self) -> Optional[Any]:  # 'Any' instead of 'RemoteAgent' to avoid circular reference
+        """
+        Get the associated agent for this endpoint.
+        
+        Returns:
+            The RemoteAgent if connected, None otherwise
+        """
+        return self.agent
     
-    def connect(self) -> RemoteAgent:
+    def connect(self) -> Any:  # 'Any' instead of 'RemoteAgent'
         """
         Connect to the server.
         
@@ -143,6 +150,8 @@ class Role(BaseModel):
 
 class ConfigSystem(BaseModel):
     """Model for a system in the configuration."""
+    model_config = ConfigDict(validate_assignment=True)
+    
     name: str
     description: Optional[str] = None
     local_settings: Dict[str, ConfigSetting] = Field(default_factory=dict)
@@ -150,9 +159,6 @@ class ConfigSystem(BaseModel):
     endpoint: ServerEndpoint
     tags: Set[str] = Field(default_factory=set)
     properties: Dict[str, Any] = Field(default_factory=dict)
-    
-    class Config:
-        validate_assignment = True
     
     def add_setting(self, key: str, value: Any, description: Optional[str] = None) -> 'ConfigSystem':
         """
@@ -321,7 +327,7 @@ class ConfigSystem(BaseModel):
         """
         return self.properties.get(key, default)
     
-    def connect(self) -> RemoteAgent:
+    def connect(self) -> Any:  # 'Any' instead of 'RemoteAgent'
         """
         Connect to the system.
         
@@ -342,11 +348,10 @@ class ConfigSystem(BaseModel):
 
 class ConfigStore(BaseModel):
     """Model for the entire configuration store."""
+    model_config = ConfigDict(validate_assignment=True)
+    
     systems: Dict[str, ConfigSystem] = Field(default_factory=dict)
     global_settings: Dict[str, ConfigSetting] = Field(default_factory=dict)
-    
-    class Config:
-        validate_assignment = True
     
     def add_system(self, system: ConfigSystem) -> ConfigSystem:
         """
@@ -394,7 +399,13 @@ class ConfigStore(BaseModel):
         """
         return self.systems.get(name)
     
-    def list_systems(self)->List[ConfigSystem]:
+    def list_systems(self) -> List[ConfigSystem]:
+        """
+        Get all systems in the store.
+        
+        Returns:
+            List of all systems
+        """
         return list(self.systems.values())
 
     def find_systems(self, predicate: Callable[[ConfigSystem], bool]) -> List[ConfigSystem]:
