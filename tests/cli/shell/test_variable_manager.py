@@ -1,8 +1,7 @@
 import pytest
 import typing as t
 from collections.abc import Mapping
-#from src.cli.shell.variable_manager import VariableManager
-
+from src.cli.shell.variable_manager import VariableManager
 
 class TestVariableManager:
     """Test suite for the VariableManager class."""
