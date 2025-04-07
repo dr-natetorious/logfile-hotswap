@@ -7,10 +7,6 @@ import logging
 from typing import Optional, List, Dict, Any, Set
 from datetime import datetime
 
-from shell.exceptions import (
-    ServerNotFoundError,
-    ServerAlreadyExistsError
-)
 from .config_models import (
     ConfigStore,
     ConfigSystem,
@@ -21,12 +17,10 @@ from .config_models import (
 
 logger = logging.getLogger(__name__)
 
-
 class ConfigStoreManager:
     """
     Manages loading and saving of the configuration store.
     """
-    
     def __init__(self, config_path: Optional[str] = None):
         """
         Initialize the configuration store manager.
@@ -67,10 +61,10 @@ class ConfigStoreManager:
         
         try:
             # Convert to dict and save as JSON
-            config_data = self.store.dict(exclude={'systems': {'__all__': {'endpoint': {'agent'}}}})
+            config_data = self.store.model_dump_json()#exclude={'systems': {'__all__': {'endpoint': {'agent'}}}})
             
             with open(self.config_path, 'w') as f:
-                json.dump(config_data, f, indent=2)
+                f.write(config_data)
             
             logger.info(f"Saved configuration with {len(self.store.systems)} systems")
         except Exception as e:
@@ -99,7 +93,7 @@ class ConfigStoreManager:
             The created system
             
         Raises:
-            ServerAlreadyExistsError: If a system with the same name already exists
+            ValueError: If a system with the same name already exists
         """
         # Create credentials if any credential info is provided
         credentials = None
@@ -130,7 +124,7 @@ class ConfigStoreManager:
             self.store.add_system(system)
             return system
         except ValueError as e:
-            raise ServerAlreadyExistsError(str(e))
+            raise
     
     def get_store(self) -> ConfigStore:
         """
