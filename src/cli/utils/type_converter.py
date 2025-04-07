@@ -1,4 +1,3 @@
-
 """
 Centralized type conversion utility leveraging typing module functions.
 """
@@ -140,8 +139,25 @@ class TypeConverter:
                 
                 # Convert each element to the specified type
                 if origin_type in (list, typing.List):
+                    # Get the element type from type_args
                     elem_type = type_args[0] if type_args else str
-                    return [cls.convert(item, elem_type) for item in parsed_value]
+                    
+                    # If the element type is a Union, we need special handling
+                    elem_origin = typing.get_origin(elem_type)
+                    if elem_origin is typing.Union:
+                        # For each element, try each type in the Union
+                        result = []
+                        for item in parsed_value:
+                            # First, if it's already the correct type, no need to convert
+                            if isinstance(item, tuple(t for t in typing.get_args(elem_type) if isinstance(t, type))):
+                                result.append(item)
+                            else:
+                                # Otherwise, convert using our normal conversion logic
+                                result.append(cls.convert(item, elem_type))
+                        return result
+                    else:
+                        # Normal list handling
+                        return [cls.convert(item, elem_type) for item in parsed_value]
                 
                 if origin_type in (tuple, typing.Tuple):
                     elem_types = type_args if type_args else [str] * len(parsed_value)
