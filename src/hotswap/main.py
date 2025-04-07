@@ -184,7 +184,8 @@ attach {self.pid}
 
 # Call libc's freopen to safely redirect the file descriptor
 # This avoids issues with file descriptor inheritance between GDB and the target process
-call (void*)freopen("{new_path_escaped}", "a", fdopen({self.fd_number}, "a"))
+set $fp = (FILE*)fdopen({self.fd_number}, "a")
+call (void*)freopen("{new_path_escaped}", "a", $fp)
 
 # Check the result (will be NULL on failure)
 if $1 == 0
@@ -194,7 +195,7 @@ if $1 == 0
 else
     echo REDIRECT_SUCCESS\\n
     # Flush the file to ensure writes are committed
-    call fflush((FILE*)$1)
+    call fflush((FILE*)$fp)
 end
 
 # Detach and quit
