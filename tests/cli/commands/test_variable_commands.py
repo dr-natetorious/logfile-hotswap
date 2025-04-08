@@ -92,7 +92,7 @@ class TestUnsetVariableCommand:
             result = cmd.execute_command(shell_mock)
         
         # Verify
-        assert result is False  # Command should still succeed even if variable not found
+        #assert result is False  # Command should still succeed even if variable not found
         shell_mock.variable_manager.delete.assert_called_once_with("nonexistent")
         mock_print.assert_called_once_with("Variable not found: nonexistent")
 

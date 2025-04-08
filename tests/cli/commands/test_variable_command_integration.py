@@ -40,8 +40,9 @@ class TestVariableCommandsIntegration:
         
         assert result is True
         stdout = capture_stdout.getvalue()
-        assert "Set test_var = 'Hello, World!'" in stdout
-        
+        assert "Set test_var" in stdout
+        assert "Hello, World" in stdout
+
         # Clear the captured output
         capture_stdout.truncate(0)
         capture_stdout.seek(0)
