@@ -165,6 +165,10 @@ class ParameterDefinition:
         """
         # Handle empty or None values
         if value_str is None or value_str == '':
+            # Special case for boolean parameters - empty string means True
+            if self.type == bool:
+                return True
+            
             # Return default if available
             if self.default is not None:
                 return self.default
@@ -453,9 +457,19 @@ class DeclarativeCommand(BaseCommand):
                 param_help += "\nParameters:\n"
                 for param_def in optional_params:
                     param_names = [param_def.param_name] + param_def.param_aliases
-                    param_help += f"  {', '.join(param_names)} <{param_def.type.__name__}>"
-                    if not param_def.mandatory:
-                        param_help += f" (default: {param_def.default})"
+                    
+                    # Special display format for boolean parameters
+                    if param_def.type == bool:
+                        param_help += f"  {', '.join(param_names)}"
+                        if not param_def.mandatory:
+                            param_help += f" (flag, default: {param_def.default})"
+                        else:
+                            param_help += " (flag)"
+                    else:
+                        param_help += f"  {', '.join(param_names)} <{param_def.type.__name__}>"
+                        if not param_def.mandatory:
+                            param_help += f" (default: {param_def.default})"
+                            
                     if param_def.help_text:
                         param_help += f" - {param_def.help_text}"
                     param_help += "\n"
