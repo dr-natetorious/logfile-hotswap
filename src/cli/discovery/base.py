@@ -4,6 +4,9 @@ Base class for discovery plugins.
 import abc
 from typing import Dict, Any, List, Optional, Set
 
+class DiscoveryError(Exception):
+    """Exception for discovery-related errors."""
+    pass
 
 class DiscoveryPlugin(abc.ABC):
     """

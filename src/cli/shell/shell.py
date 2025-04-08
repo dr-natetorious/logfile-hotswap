@@ -105,4 +105,8 @@ class ServerShell:
         cmd_name = cmd_parts[0].lower()
         cmd_args = cmd_parts[1] if len(cmd_parts) > 1 else ""
         
-        self.command_handler.execute(cmd_name, cmd_args, self)
+        self.command_handler.execute_command(cmd_name, cmd_args, self)
+
+    def exit_shell(exitcode:int=0)->None:
+        # Raise ShellExit exception to signal the shell to exit
+        raise ShellExit(exitcode)

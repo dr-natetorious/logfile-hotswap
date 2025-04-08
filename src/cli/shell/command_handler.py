@@ -72,7 +72,7 @@ class CommandHandler:
         """
         return self.commands
     
-    def execute(self, command_name, args, shell):
+    def execute_command(self, command_name, args, shell):
         """
         Execute a command by name.
         
