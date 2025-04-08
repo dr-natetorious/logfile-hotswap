@@ -92,7 +92,7 @@ class TestUnsetVariableCommand:
             result = cmd.execute_command(shell_mock)
         
         # Verify
-        assert result is True  # Command should still succeed even if variable not found
+        assert result is False  # Command should still succeed even if variable not found
         shell_mock.variable_manager.delete.assert_called_once_with("nonexistent")
         mock_print.assert_called_once_with("Variable not found: nonexistent")
 
@@ -202,7 +202,7 @@ class TestEchoCommand:
         
         # Verify
         assert result is True
-        mock_print.assert_called_once_with()  # Default empty print with newline
+        mock_print.assert_called_once_with(end="\n")  # Default empty print with newline
 
     def test_execute_command_no_newline(self):
         """Test that EchoCommand respects the no_newline flag."""

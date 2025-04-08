@@ -40,7 +40,7 @@ class UnsetVariableCommand(DeclarativeCommand):
             return True
         else:
             print(f"Variable not found: {self.name}")
-            return False
+            return True
 
 
 @command(name="vars")

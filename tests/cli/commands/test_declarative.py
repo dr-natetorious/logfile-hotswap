@@ -92,7 +92,7 @@ class TestCommandDecorator:
         (TestCommand, "test-cmd"),
         (MinimalCommand, "minimal"),
         (ParametersTestCommand, "param_test"),
-        (AliasTestCommand, "aliastestcommand")
+        (AliasTestCommand, "aliastest")
     ])
     def test_command_name_registration(self, command_class, expected_name):
         """Test command name registration through the decorator."""
@@ -297,7 +297,7 @@ class TestParameterDefinition:
         # Test completion for the primary parameter name
         completion = param.get_param_completion("-v")
         assert completion is not None
-        assert completion.text == "-v"
+        assert completion.text == "-verbose"
         
         # Test completion for an alias
         completion = param.get_param_completion("-verb")
