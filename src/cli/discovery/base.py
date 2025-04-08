@@ -12,7 +12,6 @@ class DiscoveryPlugin(abc.ABC):
     """
     Abstract base class for all discovery plugins.
     """
-    
     @abc.abstractmethod
     def get_name(self) -> str:
         """
