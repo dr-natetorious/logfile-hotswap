@@ -96,7 +96,6 @@ class TestUnsetVariableCommand:
         shell_mock.variable_manager.delete.assert_called_once_with("nonexistent")
         mock_print.assert_called_once_with("Variable not found: nonexistent")
 
-
 class TestListVariablesCommand:
     def test_initialization_default(self):
         """Test that a ListVariablesCommand can be initialized with default parameters."""

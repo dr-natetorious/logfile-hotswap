@@ -167,6 +167,16 @@ class TestVariableCommandsIntegration:
         set_cmd = SetVariableCommand.parse("error_var '[1, 2,'")
         result = set_cmd.execute_command(shell_with_var_manager)
         
-        assert result is False
-        stdout = capture_stdout.getvalue()
-        assert "Error:" in stdout
+        assert result is True
+        
+        # Check that when expression doesn't parse its treated as string
+        value= shell_with_var_manager.variable_manager.get('error_var')
+        assert isinstance(value,str)
+        assert value == '[1, 2,'
+
+        # Then confirm that the expression being value does parse correctly
+        set_cmd = SetVariableCommand.parse("error_var '[1, 2]'")
+        result = set_cmd.execute_command(shell_with_var_manager)
+        value= shell_with_var_manager.variable_manager.get('error_var')
+        assert isinstance(value, list)
+        assert value == [1,2]
