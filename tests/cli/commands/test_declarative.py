@@ -431,8 +431,12 @@ class TestDeclarativeCommand:
         assert len(completions) > 0
         
         # Find the positional parameter hint
-        pos_hint = next((c for c in completions if c.display == "<name>"), None)
-        assert pos_hint is not None
+        from prompt_toolkit.formatted_text import FormattedText
+        formatted_text:List[FormattedText] = [x for x in [c.display for c in completions]]
+        suggestions:List[str] = [x[0][1] for x in formatted_text]
+
+        for value in ['<name>','-name','-count','-verbose','-tags','-config_path']:
+            assert value in suggestions, f'Missing {value} in suggestions'
     
     def test_get_completions_partial_param(self):
         """Test get_completions with partial parameter name."""
