@@ -2,7 +2,6 @@
 Mount points discovery plugin.
 """
 from typing import Dict, Any, List, Optional, Set
-
 from .base import DiscoveryPlugin
 
 

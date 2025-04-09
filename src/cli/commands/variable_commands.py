@@ -13,14 +13,14 @@ class SetVariableCommand(DeclarativeCommand):
     """
     Set a variable to a value from a Python expression.
     """
-    name: str = Parameter(position=0, help="Name of the variable to set")
-    expression: str = Parameter(position=1, help="Python expression to evaluate")
+    name: str = Parameter(position=0, mandatory=True, help="Name of the variable to set")
+    expression: str = Parameter(position=1, mandatory=True, help="Python expression to evaluate")
     
     def execute_command(self, shell:'ServerShell') -> bool:
         """Set a variable to a value."""
         try:
             value = shell.variable_manager.set(self.name, self.expression)
-            print(f"Set {self.name} = {value!r}")
+            print(f"Set {self.name} = {value}")
             return True
         except (SyntaxError, ValueError) as e:
             print(f"Error: {e}")
@@ -40,7 +40,7 @@ class UnsetVariableCommand(DeclarativeCommand):
             return True
         else:
             print(f"Variable not found: {self.name}")
-            return False
+            return True
 
 
 @command(name="vars")

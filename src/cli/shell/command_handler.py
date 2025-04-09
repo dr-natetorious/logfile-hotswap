@@ -9,12 +9,7 @@ import inspect
 from commands.base import BaseCommand
 
 # Import declarative command support
-try:
-    from commands.declarative import DeclarativeCommand, CommandRegistry
-    DECLARATIVE_AVAILABLE = True
-except ImportError:
-    DECLARATIVE_AVAILABLE = False
-
+from commands.declarative import DeclarativeCommand, CommandRegistry
 
 class CommandHandler:
     """
@@ -48,11 +43,10 @@ class CommandHandler:
                             self.commands[cmd_name] = cmd_instance
         
         # Register declarative commands if available
-        if DECLARATIVE_AVAILABLE:
-            for name, cmd_class in CommandRegistry.get_all_commands().items():
-                # Create an instance
-                cmd_instance = cmd_class()
-                self.commands[name] = cmd_instance
+        for name, cmd_class in CommandRegistry.get_all_commands().items():
+            # Create an instance
+            cmd_instance = cmd_class()
+            self.commands[name] = cmd_instance
         
         # Also register commands from the __init__.py if it has a register_commands function
         if hasattr(commands, 'register_commands'):
@@ -72,7 +66,7 @@ class CommandHandler:
         """
         return self.commands
     
-    def execute(self, command_name, args, shell):
+    def execute_command(self, command_name, args, shell):
         """
         Execute a command by name.
         
@@ -85,7 +79,7 @@ class CommandHandler:
             cmd = self.commands[command_name]
             
             # Handle declarative commands differently
-            if DECLARATIVE_AVAILABLE and isinstance(cmd, DeclarativeCommand):
+            if isinstance(cmd, DeclarativeCommand):
                 try:
                     # Create a properly-configured instance from the args
                     cmd_class = cmd.__class__

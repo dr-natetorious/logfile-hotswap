@@ -80,21 +80,25 @@ class VariableManager:
     ) -> t.Any:
         """
         Set a variable to the result of evaluating a Python expression.
+        If the expression evaluation fails, treat it as a literal string.
         
         Args:
             name: The variable name
-            value_expr: A Python expression to evaluate
+            value_expr: A Python expression to evaluate or a literal value
             type_hint: Optional type to validate the result against
             
         Returns:
             The evaluated value
         
         Raises:
-            SyntaxError: If the expression is invalid
             ValueError: If the evaluation fails or type validation fails
         """
-        # First, evaluate the expression
-        value = self.evaluate_expression(value_expr)
+        # First, try to evaluate the expression
+        try:
+            value = self.evaluate_expression(value_expr)
+        except (SyntaxError, ValueError):
+            # If evaluation fails, treat it as a string literal
+            value = value_expr
         
         # If type_hint is provided, validate the value
         if type_hint is not None:

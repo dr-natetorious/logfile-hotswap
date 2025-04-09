@@ -66,7 +66,16 @@ class CommandRegistry:
         """Register a command class."""
         name = command_class._command_name
         cls._commands[name] = command_class
-    
+
+        # Check if the class has an 'aliases' class variable defined
+        if hasattr(command_class, '_aliases'):
+            # Register each alias, pointing to the same command class
+            for alias in command_class._aliases:
+                # Optionally, you could add a check for conflicts
+                if alias in cls._commands and cls._commands[alias] != command_class:
+                    print(f"Warning: Alias '{alias}' conflicts with existing command")
+                cls._commands[alias] = command_class
+        
     @classmethod
     def get_command(cls, name: str) -> Optional[Type['DeclarativeCommand']]:
         """Get a command class by name."""
@@ -165,6 +174,10 @@ class ParameterDefinition:
         """
         # Handle empty or None values
         if value_str is None or value_str == '':
+            # Special case for boolean parameters - empty string means True
+            if self.type == bool:
+                return True
+            
             # Return default if available
             if self.default is not None:
                 return self.default
@@ -242,6 +255,7 @@ class DeclarativeCommand(BaseCommand):
     # Class variables to store command metadata
     _command_name: ClassVar[str]
     _command_description: ClassVar[str]
+    _aliases: ClassVar[List[str]]
     
     @classmethod
     def get_command_names(cls):
@@ -249,7 +263,10 @@ class DeclarativeCommand(BaseCommand):
         Return all command names handled by this class.
         For compatibility with original BaseCommand interface.
         """
-        return [cls._command_name]
+        if hasattr(cls,'_aliases'):
+            return [cls._command_name] + cls._aliases
+        else:
+            return [cls._command_name]
     
     @classmethod
     def get_parameter_definitions(cls) -> List[ParameterDefinition]:
@@ -453,9 +470,19 @@ class DeclarativeCommand(BaseCommand):
                 param_help += "\nParameters:\n"
                 for param_def in optional_params:
                     param_names = [param_def.param_name] + param_def.param_aliases
-                    param_help += f"  {', '.join(param_names)} <{param_def.type.__name__}>"
-                    if not param_def.mandatory:
-                        param_help += f" (default: {param_def.default})"
+                    
+                    # Special display format for boolean parameters
+                    if param_def.type == bool:
+                        param_help += f"  {', '.join(param_names)}"
+                        if not param_def.mandatory:
+                            param_help += f" (flag, default: {param_def.default})"
+                        else:
+                            param_help += " (flag)"
+                    else:
+                        param_help += f"  {', '.join(param_names)} <{param_def.type.__name__}>"
+                        if not param_def.mandatory:
+                            param_help += f" (default: {param_def.default})"
+                            
                     if param_def.help_text:
                         param_help += f" - {param_def.help_text}"
                     param_help += "\n"

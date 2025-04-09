@@ -5,8 +5,7 @@ import shlex
 from typing import List, Optional
 from .base import BaseCommand
 from prompt_toolkit.completion import Completion
-from shell.exceptions import DiscoveryError
-
+from discovery.base import DiscoveryError
 
 class DiscoveryCommand(BaseCommand):
     """
