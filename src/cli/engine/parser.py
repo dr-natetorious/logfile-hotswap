@@ -412,8 +412,11 @@ class Parser:
         Raises:
             ValueError: If the statement cannot be parsed
         """
+        if not self._peek():
+            return None
+            
         # Handle variable assignment: $name = expr
-        if self._peek() and self._peek().type == TokenType.VARIABLE:
+        if self._peek().type == TokenType.VARIABLE:
             var_token = self._advance()
             
             # Skip optional whitespace
@@ -426,7 +429,7 @@ class Parser:
                 return SetVariableStatement(var_token.value, expr)
         
         # Handle blocks with introducer: keyword:
-        if self._peek() and self._peek().type == TokenType.KEYWORD:
+        if self._peek().type == TokenType.KEYWORD:
             keyword_token = self._advance()
             
             # Check if this is a foreach statement
@@ -443,7 +446,7 @@ class Parser:
                 return self._parse_indented_block(keyword_token.value)
         
         # Check for blocks with command introducer: command:
-        if self._peek() and self._peek().type == TokenType.COMMAND:
+        if self._peek().type == TokenType.COMMAND:
             cmd_token = self._advance()
             
             # Check for colon
@@ -454,8 +457,19 @@ class Parser:
             # Otherwise it's a regular command
             self.pos -= 1  # Back up to reprocess the command token
         
-        # Default to a command statement
-        return self._parse_command_statement()
+        # Parse command statement (may return None if no command found)
+        cmd_stmt = self._parse_command_statement()
+        if cmd_stmt:
+            return cmd_stmt
+            
+        # Skip any unexpected tokens to avoid infinite loops
+        if self._peek() and self._peek().type not in (TokenType.NEWLINE, TokenType.DEDENT, TokenType.EOF):
+            # Log the skipped token for debugging
+            token = self._advance()
+            print(f"Warning: Skipping unexpected token {token.type.name}({repr(token.value)}) at line {token.line}")
+            
+        # No valid statement found
+        return None
     
     def _parse_foreach_statement(self) -> ForEachStatement:
         """
@@ -542,7 +556,14 @@ class Parser:
         self._expect(TokenType.INDENT)
         
         # Parse statements until we hit a dedent
+        max_iterations = 1000  # Safety measure to prevent infinite loops
+        iteration_count = 0
+        
         while self._peek() and self._peek().type != TokenType.DEDENT:
+            iteration_count += 1
+            if iteration_count > max_iterations:
+                raise ValueError(f"Potential infinite loop detected in _parse_indented_block. Current token: {self._peek()}")
+                
             # Skip newlines between statements
             while self._match(TokenType.NEWLINE):
                 pass
@@ -552,6 +573,15 @@ class Parser:
                 stmt = self._parse_statement()
                 if stmt:  # Only add non-None statements
                     block.append(stmt)
+                else:
+                    # No valid statement found, but we're still in the block
+                    # Skip to the next line to avoid infinite loops
+                    while self._peek() and self._peek().type not in (TokenType.NEWLINE, TokenType.DEDENT, TokenType.EOF):
+                        token = self._advance()
+                        print(f"Warning: Skipping unexpected token in block: {token.type.name}({repr(token.value)}) at line {token.line}")
+                    
+                    # Make sure we advance past the newline
+                    self._match(TokenType.NEWLINE)
         
         # Consume the dedent
         self._expect(TokenType.DEDENT)
@@ -567,23 +597,37 @@ class Parser:
         Returns:
             A CommandStatement object or None if no command found
         """
-        # Check if there's a command
-        if not self._peek() or self._peek().type != TokenType.COMMAND:
-            return None
+        # Check if there's a command token at current position
+        if self._peek() and self._peek().type == TokenType.COMMAND:
+            # Get the command name
+            cmd_token = self._advance()
+            cmd_name = cmd_token.value
             
-        # Get the command name
-        cmd_token = self._advance()
-        cmd_name = cmd_token.value
+            # Collect all tokens for the command arguments until newline/EOF
+            arg_tokens = []
+            while self._peek() and self._peek().type not in (TokenType.NEWLINE, TokenType.EOF):
+                arg_tokens.append(self._advance())
+            
+            # Convert tokens to argument string
+            args_str = self._tokens_to_arg_string(arg_tokens)
+            
+            return CommandStatement(cmd_name, args_str)
         
-        # Collect all tokens for the command arguments until newline/EOF
-        arg_tokens = []
-        while self._peek() and self._peek().type not in (TokenType.NEWLINE, TokenType.EOF):
-            arg_tokens.append(self._advance())
-        
-        # Convert tokens to argument string
-        args_str = self._tokens_to_arg_string(arg_tokens)
-        
-        return CommandStatement(cmd_name, args_str)
+        # Special case: we might be starting with a parameter without a command
+        # This would be an error case, but we need to handle it to avoid infinite loops
+        elif self._peek() and self._peek().type == TokenType.PARAMETER:
+            # Skip this parameter token to avoid infinite loops
+            param_token = self._advance()
+            
+            # Consume the rest of the line
+            while self._peek() and self._peek().type not in (TokenType.NEWLINE, TokenType.EOF):
+                self._advance()
+                
+            # Report the error by raising an exception
+            raise ValueError(f"Parameter '{param_token.value}' without a command at line {param_token.line}")
+            
+        # No command found
+        return None
     
     def _tokens_to_arg_string(self, tokens: List[Token]) -> str:
         """
