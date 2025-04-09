@@ -286,6 +286,10 @@ class Lexer:
             self.line += 1
             self.column = 1
         
+        # Make sure the last line has a newline for consistent processing
+        if lines and not lines[-1].endswith('\n'):
+            result.append(Token(TokenType.NEWLINE, '\n', self.line - 1, self.column))
+        
         # Add any remaining DEDENT tokens at the end
         while len(self.indent_stack) > 1:
             self.indent_stack.pop()
@@ -555,11 +559,11 @@ class Parser:
         # Expect an indent
         self._expect(TokenType.INDENT)
         
-        # Parse statements until we hit a dedent
+        # Parse statements until we hit a dedent or EOF
         max_iterations = 1000  # Safety measure to prevent infinite loops
         iteration_count = 0
         
-        while self._peek() and self._peek().type != TokenType.DEDENT:
+        while self._peek() and self._peek().type not in (TokenType.DEDENT, TokenType.EOF):
             iteration_count += 1
             if iteration_count > max_iterations:
                 raise ValueError(f"Potential infinite loop detected in _parse_indented_block. Current token: {self._peek()}")
@@ -569,7 +573,7 @@ class Parser:
                 pass
                 
             # Parse the next statement if we haven't reached the end of the block
-            if self._peek() and self._peek().type != TokenType.DEDENT:
+            if self._peek() and self._peek().type not in (TokenType.DEDENT, TokenType.EOF):
                 stmt = self._parse_statement()
                 if stmt:  # Only add non-None statements
                     block.append(stmt)
@@ -583,8 +587,9 @@ class Parser:
                     # Make sure we advance past the newline
                     self._match(TokenType.NEWLINE)
         
-        # Consume the dedent
-        self._expect(TokenType.DEDENT)
+        # Consume the dedent if present, otherwise we're at EOF
+        if self._peek() and self._peek().type == TokenType.DEDENT:
+            self._advance()  # Consume the DEDENT
         
         return block
     
