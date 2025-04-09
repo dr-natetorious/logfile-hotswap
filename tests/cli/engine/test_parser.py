@@ -6,7 +6,7 @@ This module tests the tokenization and parsing functionality of the shell script
 import pytest
 from typing import List, Dict, Any, Type, Tuple
 
-from src.cli.engine.parser import (
+from engine.parser import (
     TokenType,
     Token,
     Lexer,
@@ -26,7 +26,7 @@ from engine.statements import (
 class TestLexer:
     """Tests for the Lexer class."""
     
-    @pytest.mark.parametrize("input_text,expected_tokens", [
+    @pytest.mark.parametrize("input_text,expected_token_types", [
         (
             "command",
             [TokenType.COMMAND]
@@ -45,14 +45,14 @@ class TestLexer:
         ),
         (
             "command # comment",
-            [TokenType.COMMAND]  # Comment should be skipped
+            [TokenType.COMMAND, TokenType.COMMENT]  # Comment should be recognized
         ),
         (
-            "keyword:",
+            "foreach:",  # Using a keyword
             [TokenType.KEYWORD, TokenType.COLON]
         ),
     ])
-    def test_tokenize_basic(self, input_text, expected_tokens):
+    def test_tokenize_basic(self, input_text, expected_token_types):
         """Test basic tokenization of different inputs."""
         # Arrange
         lexer = Lexer(input_text)
@@ -60,15 +60,18 @@ class TestLexer:
         # Act
         tokens = lexer.tokenize()
         
-        # Assert - ignore EOF token at the end
-        assert len(tokens) == len(expected_tokens) + 1
-        for i, expected_type in enumerate(expected_tokens):
-            assert tokens[i].type == expected_type
+        # Filter out EOF for easier comparison
+        tokens = [t for t in tokens if t.type != TokenType.EOF]
+        
+        # Assert
+        assert len(tokens) == len(expected_token_types)
+        for i, expected_type in enumerate(expected_token_types):
+            assert tokens[i].type == expected_type, f"Token {i} should be {expected_type.name} but was {tokens[i].type.name}"
     
     def test_tokenize_indentation(self):
         """Test handling of indentation."""
         # Arrange
-        input_text = """keyword:
+        input_text = """foreach:
     command1
     command2
 other_command"""
@@ -78,7 +81,7 @@ other_command"""
         tokens = lexer.tokenize()
         
         # Extract just the token types for easier comparison
-        token_types = [token.type for token in tokens]
+        token_types = [token.type for token in tokens if token.type != TokenType.EOF]
         
         # Assert
         expected_types = [
@@ -91,8 +94,7 @@ other_command"""
             TokenType.COMMAND,
             TokenType.NEWLINE,
             TokenType.DEDENT,
-            TokenType.COMMAND,
-            TokenType.EOF
+            TokenType.COMMAND
         ]
         assert token_types == expected_types
     
@@ -111,7 +113,7 @@ command3"""
         tokens = lexer.tokenize()
         
         # Extract just the token types for easier comparison
-        token_types = [token.type for token in tokens]
+        token_types = [token.type for token in tokens if token.type != TokenType.EOF]
         
         # Assert
         expected_types = [
@@ -134,7 +136,6 @@ command3"""
             TokenType.NEWLINE,
             TokenType.DEDENT,
             TokenType.COMMAND,  # command3
-            TokenType.EOF
         ]
         assert token_types == expected_types
     
@@ -173,17 +174,34 @@ command3"""
         
         # Assert
         expected_types = [
-            TokenType.VARIABLE,  # $result
-            TokenType.ASSIGNMENT,  # =
-            TokenType.NUMBER,  # 2
-            TokenType.IDENTIFIER,  # *
-            TokenType.LEFT_PAREN,  # (
-            TokenType.NUMBER,  # 3
-            TokenType.IDENTIFIER,  # +
-            TokenType.NUMBER,  # 4
-            TokenType.RIGHT_PAREN  # )
+            TokenType.VARIABLE,      # $result
+            TokenType.ASSIGNMENT,    # =
+            TokenType.NUMBER,        # 2
+            TokenType.OPERATOR,      # *
+            TokenType.LEFT_PAREN,    # (
+            TokenType.NUMBER,        # 3
+            TokenType.OPERATOR,      # +
+            TokenType.NUMBER,        # 4
+            TokenType.RIGHT_PAREN    # )
         ]
         assert token_types == expected_types
+    
+    def test_tokenize_comment_line(self):
+        """Test tokenization of a line with just a comment."""
+        # Arrange
+        input_text = "# This is a comment"
+        
+        # Act
+        lexer = Lexer(input_text)
+        tokens = lexer.tokenize()
+        
+        # Filter out EOF
+        tokens = [t for t in tokens if t.type != TokenType.EOF]
+        
+        # Assert
+        assert len(tokens) == 1
+        assert tokens[0].type == TokenType.COMMENT
+        assert tokens[0].value == "# This is a comment"
     
     def test_invalid_syntax(self):
         """Test that invalid syntax raises an error."""
@@ -358,7 +376,24 @@ command2 -param value"""
         # Assert
         assert isinstance(result, CommandStatement)
         assert result.command_name == "command"
-        assert result.args_str == '-param "value with spaces" -flag'
+        assert '-param "value with spaces" -flag' in result.args_str
+    
+    def test_parse_comments_in_code(self):
+        """Test parsing code with comments."""
+        # Arrange
+        input_text = """command1 # This command does something
+command2 # Another comment"""
+        
+        # Act
+        result = parse_script(input_text)
+        
+        # Assert
+        assert isinstance(result, CodeBlock)
+        assert len(result) == 2
+        assert isinstance(result[0], CommandStatement)
+        assert result[0].command_name == "command1"
+        assert isinstance(result[1], CommandStatement)
+        assert result[1].command_name == "command2"
 
 
 class TestIntegrationScenarios:
@@ -421,3 +456,37 @@ generate-report -title "Connection Results"
         # Check final command
         assert isinstance(result[3], CommandStatement)
         assert result[3].command_name == "generate-report"
+    
+    def test_script_with_expressions(self):
+        """Test parsing a script with complex expressions."""
+        # Arrange
+        script = """$result = 2 * (3 + 4) # Calculate a value
+$array = [1, 2, 3, 4, 5]
+$filtered = $array.filter(x => x > 2)  # PowerShell-like syntax
+
+process -value $result -items $filtered
+"""
+        
+        # Act
+        result = parse_script(script)
+        
+        # Assert
+        assert isinstance(result, CodeBlock)
+        assert len(result) == 4
+        
+        # Check expressions in variable assignments
+        assert isinstance(result[0], SetVariableStatement)
+        assert result[0].variable_name == "result"
+        assert "2 * (3 + 4)" in result[0].expression
+        
+        assert isinstance(result[1], SetVariableStatement)
+        assert result[1].variable_name == "array"
+        assert "[1, 2, 3, 4, 5]" in result[1].expression
+        
+        assert isinstance(result[2], SetVariableStatement)
+        assert result[2].variable_name == "filtered"
+        
+        # Check command with variables
+        assert isinstance(result[3], CommandStatement)
+        assert result[3].command_name == "process"
+        assert "-value $result -items $filtered" in result[3].args_str

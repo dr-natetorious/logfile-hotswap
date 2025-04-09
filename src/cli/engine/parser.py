@@ -42,9 +42,10 @@ class TokenType(Enum):
     DOT = auto()               # Dot (.)
     KEYWORD = auto()           # Language keyword
     IDENTIFIER = auto()        # Identifier
-    EXPRESSION = auto()        # Expression
+    OPERATOR = auto()          # Operator like +, -, *, /, etc.
     INDENT = auto()            # Indentation increase
     DEDENT = auto()            # Indentation decrease
+    COMMENT = auto()           # Comment (# ...)
     EOF = auto()               # End of file/input
 
 
@@ -73,6 +74,9 @@ class Lexer:
         'foreach', 'in', 'if', 'else', 'elseif', 'try', 'catch', 'finally',
         'while', 'for', 'parallel', 'function', 'return', 'break', 'continue'
     }
+
+    # Operators
+    OPERATORS = {'+', '-', '*', '/', '%', '==', '!=', '<', '>', '<=', '>=', '&&', '||', '!'}
     
     def __init__(self, text: str):
         """
@@ -104,7 +108,10 @@ class Lexer:
             (r'\d+\.\d+', lambda m: Token(TokenType.NUMBER, float(m.group(0)), self.line, self.column)),
             (r'\d+', lambda m: Token(TokenType.NUMBER, int(m.group(0)), self.line, self.column)),
             
-            # Delimiters and operators
+            # Comments - capture the whole comment
+            (r'#[^\n]*', lambda m: Token(TokenType.COMMENT, m.group(0), self.line, self.column)),
+            
+            # Operators and delimiters
             (r'=', lambda m: Token(TokenType.ASSIGNMENT, '=', self.line, self.column)),
             (r':', lambda m: Token(TokenType.COLON, ':', self.line, self.column)),
             (r';', lambda m: Token(TokenType.SEMICOLON, ';', self.line, self.column)),
@@ -116,13 +123,16 @@ class Lexer:
             (r',', lambda m: Token(TokenType.COMMA, ',', self.line, self.column)),
             (r'\.', lambda m: Token(TokenType.DOT, '.', self.line, self.column)),
             
+            # Operators
+            (r'[+\-*/%<>=!&|]+', self._operator_token),
+            
             # Whitespace
             (r'[ \t]+', lambda m: Token(TokenType.WHITESPACE, m.group(0), self.line, self.column)),
             
             # Newline (for indentation processing)
             (r'\n', self._newline_token),
             
-            # Identifiers and keywords
+            # Identifiers and keywords (must be last to not override others)
             (r'[a-zA-Z_][a-zA-Z0-9_\-]*', self._identifier_or_keyword_token),
         ]
     
@@ -136,8 +146,17 @@ class Lexer:
         # Extract the string including quotes
         full_str = match.group(0)
         # Process the string value (remove quotes and handle escapes)
-        value = ast.literal_eval(full_str)
+        try:
+            value = ast.literal_eval(full_str)
+        except (SyntaxError, ValueError):
+            # Fallback if ast.literal_eval fails
+            value = full_str[1:-1].replace('\\"', '"').replace("\\'", "'")
         return Token(TokenType.STRING, value, self.line, self.column)
+    
+    def _operator_token(self, match):
+        """Create an operator token."""
+        op = match.group(0)
+        return Token(TokenType.OPERATOR, op, self.line, self.column)
     
     def _newline_token(self, match):
         """Handle newline and process indentation on the next line."""
@@ -210,8 +229,15 @@ class Lexer:
         result = []
         
         for i, line in enumerate(lines):
-            # Skip empty lines or comment-only lines
-            if not line.strip() or line.strip().startswith('#'):
+            # Skip empty lines
+            if not line.strip():
+                self.line += 1
+                continue
+                
+            # Handle comments for the entire line
+            if line.strip().startswith('#'):
+                # Add a comment token but don't process further
+                result.append(Token(TokenType.COMMENT, line.strip(), self.line, 1))
                 self.line += 1
                 continue
             
@@ -224,6 +250,13 @@ class Lexer:
             self.column = pos + 1  # 1-based column indexing
             
             while pos < len(line):
+                # Skip if we've reached a comment
+                if pos < len(line) and line[pos] == '#':
+                    # Add a comment token
+                    comment = line[pos:].rstrip('\n')
+                    result.append(Token(TokenType.COMMENT, comment, self.line, self.column))
+                    break
+                
                 # Try to match a token pattern
                 matched = False
                 
@@ -233,7 +266,10 @@ class Lexer:
                     
                     if match:
                         token = token_func(match)
-                        if token.type != TokenType.WHITESPACE:  # Skip whitespace in the result
+                        
+                        # Store all tokens for context, but filter whitespace from final result
+                        self.tokens.append(token)
+                        if token.type != TokenType.WHITESPACE:
                             result.append(token)
                         
                         # Update position and column
@@ -275,7 +311,8 @@ class Parser:
         Args:
             tokens: List of tokens from the lexer
         """
-        self.tokens = tokens
+        # Filter out comments from the token stream
+        self.tokens = [token for token in tokens if token.type != TokenType.COMMENT]
         self.pos = 0
     
     def _peek(self) -> Optional[Token]:
@@ -303,6 +340,21 @@ class Parser:
         """
         token = self._peek()
         if token and token.type == token_type:
+            return self._advance()
+        return None
+    
+    def _match_any(self, token_types: List[TokenType]) -> Optional[Token]:
+        """
+        Match and consume a token of any of the specified types.
+        
+        Args:
+            token_types: List of acceptable token types
+            
+        Returns:
+            The matched token or None if no match
+        """
+        token = self._peek()
+        if token and token.type in token_types:
             return self._advance()
         return None
     
@@ -345,21 +397,22 @@ class Parser:
             # Check if we have another statement
             if self._peek() and self._peek().type != TokenType.EOF:
                 stmt = self._parse_statement()
-                block.append(stmt)
+                if stmt:  # Only add non-None statements
+                    block.append(stmt)
         
         return block
     
-    def _parse_statement(self) -> Statement:
+    def _parse_statement(self) -> Optional[Statement]:
         """
         Parse a single statement.
         
         Returns:
-            A Statement object
+            A Statement object or None if no valid statement was found
         
         Raises:
             ValueError: If the statement cannot be parsed
         """
-        # Check for variable assignment: $name = expr
+        # Handle variable assignment: $name = expr
         if self._peek() and self._peek().type == TokenType.VARIABLE:
             var_token = self._advance()
             
@@ -372,66 +425,102 @@ class Parser:
                 expr = self._parse_expression()
                 return SetVariableStatement(var_token.value, expr)
         
-        # Check for block with introducer: keyword:
-        if self._peek() and self._peek().type in (TokenType.KEYWORD, TokenType.COMMAND):
+        # Handle blocks with introducer: keyword:
+        if self._peek() and self._peek().type == TokenType.KEYWORD:
             keyword_token = self._advance()
             
+            # Check if this is a foreach statement
+            if keyword_token.value == 'foreach':
+                return self._parse_foreach_statement()
+                
+            # Check if this is a try statement
+            if keyword_token.value == 'try':
+                return self._parse_try_catch_statement()
+                
             # Check for colon after keyword
             if self._match(TokenType.COLON):
                 # Parse indented block
                 return self._parse_indented_block(keyword_token.value)
         
-        # Check for foreach statement: foreach $item in $collection
-        if self._peek() and self._peek().type == TokenType.KEYWORD and self._peek().value == 'foreach':
-            self._advance()  # Consume 'foreach'
+        # Check for blocks with command introducer: command:
+        if self._peek() and self._peek().type == TokenType.COMMAND:
+            cmd_token = self._advance()
             
-            # Skip whitespace and get variable
-            self._match(TokenType.WHITESPACE)
-            var_token = self._expect(TokenType.VARIABLE)
+            # Check for colon
+            if self._match(TokenType.COLON):
+                # Parse indented block with command as type
+                return self._parse_indented_block(cmd_token.value)
             
-            # Skip whitespace and get 'in' keyword
-            self._match(TokenType.WHITESPACE)
-            in_token = self._expect(TokenType.KEYWORD)
-            if in_token.value != 'in':
-                raise ValueError(f"Expected 'in' keyword, got '{in_token.value}' at line {in_token.line}")
-            
-            # Skip whitespace and get collection expression
-            self._match(TokenType.WHITESPACE)
-            collection_expr = self._parse_expression()
-            
-            # Get indented block
-            body = self._parse_indented_block(None)
-            
-            return ForEachStatement(var_token.value, collection_expr, body)
-            
-        # Check for try-catch statement
-        if self._peek() and self._peek().type == TokenType.KEYWORD and self._peek().value == 'try':
-            self._advance()  # Consume 'try'
-            
-            # Skip whitespace and colon
-            self._match(TokenType.WHITESPACE)
-            self._expect(TokenType.COLON)
-            
-            # Parse try block
-            try_block = self._parse_indented_block(None)
-            
-            # Find catch block
-            if self._peek() and self._peek().type == TokenType.KEYWORD and self._peek().value == 'catch':
-                self._advance()  # Consume 'catch'
-                
-                # Skip whitespace and colon
-                self._match(TokenType.WHITESPACE)
-                self._expect(TokenType.COLON)
-                
-                # Parse catch block
-                catch_block = self._parse_indented_block(None)
-                
-                return TryCatchStatement(try_block, catch_block)
-            else:
-                raise ValueError("Expected 'catch' block after 'try'")
+            # Otherwise it's a regular command
+            self.pos -= 1  # Back up to reprocess the command token
         
         # Default to a command statement
         return self._parse_command_statement()
+    
+    def _parse_foreach_statement(self) -> ForEachStatement:
+        """
+        Parse a foreach statement.
+        
+        Format: foreach $item in collection_expr:
+                    # indented block
+                    
+        Returns:
+            A ForEachStatement object
+        """
+        # We've already consumed the 'foreach' keyword
+        
+        # Skip whitespace and get variable
+        self._match(TokenType.WHITESPACE)
+        var_token = self._expect(TokenType.VARIABLE)
+        
+        # Skip whitespace and get 'in' keyword
+        self._match(TokenType.WHITESPACE)
+        in_token = self._expect(TokenType.KEYWORD)
+        if in_token.value != 'in':
+            raise ValueError(f"Expected 'in' keyword, got '{in_token.value}' at line {in_token.line}")
+        
+        # Skip whitespace and get collection expression
+        self._match(TokenType.WHITESPACE)
+        collection_expr = self._parse_expression()
+        
+        # Expect colon
+        self._expect(TokenType.COLON)
+        
+        # Get indented block
+        body = self._parse_indented_block(None)
+        
+        return ForEachStatement(var_token.value, collection_expr, body)
+    
+    def _parse_try_catch_statement(self) -> TryCatchStatement:
+        """
+        Parse a try-catch statement.
+        
+        Format: try:
+                    # indented try block
+                catch:
+                    # indented catch block
+                    
+        Returns:
+            A TryCatchStatement object
+        """
+        # We've already consumed the 'try' keyword
+        
+        # Expect colon
+        self._expect(TokenType.COLON)
+        
+        # Parse try block
+        try_block = self._parse_indented_block(None)
+        
+        # Expect 'catch' keyword
+        self._expect(TokenType.KEYWORD)  # Should be 'catch'
+        
+        # Expect colon
+        self._expect(TokenType.COLON)
+        
+        # Parse catch block
+        catch_block = self._parse_indented_block(None)
+        
+        return TryCatchStatement(try_block, catch_block)
     
     def _parse_indented_block(self, block_type: Optional[str]) -> CodeBlock:
         """
@@ -444,10 +533,7 @@ class Parser:
             A CodeBlock containing the parsed statements
         """
         # Create a code block with the specified type
-        block = CodeBlock()
-        if block_type:
-            # Add metadata to the block if needed
-            block.block_type = block_type
+        block = CodeBlock(block_type=block_type)
         
         # Expect a newline
         self._expect(TokenType.NEWLINE)
@@ -464,49 +550,103 @@ class Parser:
             # Parse the next statement if we haven't reached the end of the block
             if self._peek() and self._peek().type != TokenType.DEDENT:
                 stmt = self._parse_statement()
-                block.append(stmt)
+                if stmt:  # Only add non-None statements
+                    block.append(stmt)
         
         # Consume the dedent
         self._expect(TokenType.DEDENT)
         
         return block
     
-    def _parse_command_statement(self) -> CommandStatement:
+    def _parse_command_statement(self) -> Optional[CommandStatement]:
         """
         Parse a command statement.
         
+        Format: command arg1 arg2 ...
+        
         Returns:
-            A CommandStatement object
+            A CommandStatement object or None if no command found
         """
+        # Check if there's a command
+        if not self._peek() or self._peek().type != TokenType.COMMAND:
+            return None
+            
         # Get the command name
-        cmd_token = self._expect(TokenType.COMMAND)
+        cmd_token = self._advance()
         cmd_name = cmd_token.value
         
-        # Collect all the remaining tokens for the command arguments
-        args = []
+        # Collect all tokens for the command arguments until newline/EOF
+        arg_tokens = []
         while self._peek() and self._peek().type not in (TokenType.NEWLINE, TokenType.EOF):
-            args.append(self._advance().value)
+            arg_tokens.append(self._advance())
         
-        # Join arguments with spaces
-        args_str = ' '.join(str(arg) for arg in args)
+        # Convert tokens to argument string
+        args_str = self._tokens_to_arg_string(arg_tokens)
         
         return CommandStatement(cmd_name, args_str)
     
+    def _tokens_to_arg_string(self, tokens: List[Token]) -> str:
+        """
+        Convert a list of tokens to a command argument string.
+        
+        Args:
+            tokens: List of tokens representing the arguments
+            
+        Returns:
+            Argument string suitable for the CommandStatement
+        """
+        parts = []
+        for token in tokens:
+            if token.type == TokenType.STRING:
+                # Re-quote strings
+                parts.append(f'"{token.value}"')
+            elif token.type == TokenType.VARIABLE:
+                # Re-add $ prefix
+                parts.append(f'${token.value}')
+            else:
+                parts.append(str(token.value))
+        
+        return ' '.join(parts)
+    
     def _parse_expression(self) -> str:
         """
-        Parse an expression.
-        
-        Currently simplistic: just collects tokens until newline/EOF.
+        Parse an expression until newline, colon, or EOF.
         
         Returns:
             The expression as a string
         """
-        tokens = []
-        while self._peek() and self._peek().type not in (TokenType.NEWLINE, TokenType.EOF):
-            tokens.append(self._advance().value)
+        expr_tokens = []
         
-        # Join all tokens to form the expression
-        return ' '.join(str(token) for token in tokens)
+        # Collect tokens until newline, colon, or EOF
+        while (self._peek() and 
+               self._peek().type not in (TokenType.NEWLINE, TokenType.COLON, TokenType.EOF)):
+            expr_tokens.append(self._advance())
+        
+        # Convert tokens to expression string
+        return self._tokens_to_expression(expr_tokens)
+    
+    def _tokens_to_expression(self, tokens: List[Token]) -> str:
+        """
+        Convert a list of tokens to an expression string.
+        
+        Args:
+            tokens: List of tokens representing the expression
+            
+        Returns:
+            Expression string
+        """
+        parts = []
+        for token in tokens:
+            if token.type == TokenType.STRING:
+                # Format as a proper Python string
+                parts.append(repr(token.value))
+            elif token.type == TokenType.VARIABLE:
+                # Re-add $ prefix
+                parts.append(f'${token.value}')
+            else:
+                parts.append(str(token.value))
+        
+        return ' '.join(parts)
 
 
 def parse_script(script_text: str) -> CodeBlock:
