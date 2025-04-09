@@ -11,7 +11,7 @@ import uuid
 from dataclasses import asdict
 from typing import List, Dict, Any, Optional
 
-from src.cli.shell.update_info import (
+from src.cli.engine.update_info import (
     UpdateInfoNode, 
     LogEntry, 
     ErrorInfo,
