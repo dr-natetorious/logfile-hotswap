@@ -22,7 +22,6 @@ from engine.statements import (
     TryCatchStatement
 )
 
-
 class TestLexer:
     """Tests for the Lexer class."""
     

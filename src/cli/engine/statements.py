@@ -9,6 +9,8 @@ import ast
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any, Type, Union, ClassVar, Set, Tuple, Sequence, Iterator
 
+# Type aliases for common types
+StatementOrBlock = Union[List['Statement'], 'CodeBlock']
 
 class Statement(abc.ABC):
     """
@@ -101,7 +103,7 @@ class ForEachStatement(Statement):
     """
     item_var: str
     collection_expr: str
-    body: Union['CodeBlock', List[Statement]]
+    body: StatementOrBlock
     
     def __post_init__(self):
         """Convert body to CodeBlock if it's a list."""
@@ -116,17 +118,88 @@ class ForEachStatement(Statement):
 
 
 @dataclass
+class ParallelBlock(Statement):
+    """
+    Represents a block of statements to be executed in parallel.
+    
+    Format: parallel [$collection [as $item] [restricted by $policy]]:
+        # indented statements
+    """
+    body: StatementOrBlock  # The statements to execute in parallel
+    collection_expr: Optional[str] = None  # Optional collection to iterate over
+    item_var: Optional[str] = None  # Optional variable name for current item
+    policy_expr: Optional[str] = None  # Optional restriction policy
+    max_concurrent: int = 10  # Maximum concurrent executions
+    
+    def __post_init__(self):
+        """Convert body to CodeBlock if it's a list."""
+        if isinstance(self.body, list):
+            self.body = CodeBlock(self.body)
+    
+    def execute(self, executor) -> Any:
+        """
+        Execute statements in parallel, with optional iteration.
+        """
+        if self.collection_expr:
+            # Parallel foreach mode
+            return executor.execute_parallel_foreach(
+                self.item_var or "_item",  # Use default name if not specified
+                self.collection_expr,
+                self.body,
+                self.policy_expr,
+                self.max_concurrent
+            )
+        else:
+            # Simple parallel block mode
+            return executor.execute_parallel_block(
+                self.body,
+                self.max_concurrent
+            )
+
+
+@dataclass
+class RemoteBlockStatement(Statement):
+    """
+    Represents a block of statements to be executed on one or more remote systems.
+    
+    Format: remote $system|$systems [as $target]:
+               # indented statements to execute remotely
+    """
+    system_expr: str  # Expression to evaluate to one or more systems
+    body: StatementOrBlock
+    target_var: Optional[str] = None  # Optional variable name to reference the current system
+    
+    def __post_init__(self):
+        """Convert body to CodeBlock if it's a list."""
+        if isinstance(self.body, list):
+            self.body = CodeBlock(self.body)
+    
+    def execute(self, executor) -> Any:
+        """
+        Execute statements on remote system(s).
+        """
+        return executor.execute_remote_block(
+            self.system_expr,
+            self.body,
+            self.target_var
+        )
+
+
+@dataclass
 class TryCatchStatement(Statement):
     """
-    Represents a try-catch block for error handling.
+    Represents a try-catch-finally block for error handling.
     Format: 
     try:
         # indented statements
     catch:
-        # indented statements
+        # indented statements with access to $error
+    finally:
+        # indented statements always executed]
     """
-    try_block: Union['CodeBlock', List[Statement]]
-    catch_block: Union['CodeBlock', List[Statement]]
+    try_block: StatementOrBlock
+    catch_block: StatementOrBlock
+    finally_block: Optional[StatementOrBlock] = None
     
     def __post_init__(self):
         """Convert blocks to CodeBlock if they're lists."""
@@ -134,12 +207,46 @@ class TryCatchStatement(Statement):
             self.try_block = CodeBlock(self.try_block)
         if isinstance(self.catch_block, list):
             self.catch_block = CodeBlock(self.catch_block)
+        if self.finally_block is not None and isinstance(self.finally_block, list):
+            self.finally_block = CodeBlock(self.finally_block)
     
     def execute(self, executor) -> Any:
         """
-        Execute the try-catch block using the executor.
+        Execute the try-catch-finally block using the executor.
         """
-        return executor.execute_try_catch(self.try_block, self.catch_block)
+        return executor.execute_try_catch(
+            self.try_block, 
+            self.catch_block,
+            self.finally_block
+        )
+
+
+@dataclass
+class BreakStatement(Statement):
+    """
+    Represents a break statement to exit a loop.
+    
+    Format: break
+    """
+    def execute(self, executor) -> Any:
+        """
+        Break out of the current loop.
+        """
+        return executor.execute_break()
+
+
+@dataclass
+class ContinueStatement(Statement):
+    """
+    Represents a continue statement to skip to the next iteration.
+    
+    Format: continue
+    """
+    def execute(self, executor) -> Any:
+        """
+        Skip to the next iteration of the current loop.
+        """
+        return executor.execute_continue()
 
 
 @dataclass
@@ -254,7 +361,7 @@ class IfStatement(Statement):
     """
     conditions: List[str]
     blocks: List[CodeBlock]
-    else_block: Optional[CodeBlock] = None
+    else_block: Optional['CodeBlock'] = None
     
     def execute(self, executor) -> Any:
         """
@@ -273,7 +380,12 @@ class WhileStatement(Statement):
         # indented statements
     """
     condition: str
-    body: CodeBlock
+    body: StatementOrBlock
+    
+    def __post_init__(self):
+        """Convert body to CodeBlock if it's a list."""
+        if isinstance(self.body, list):
+            self.body = CodeBlock(self.body)
     
     def execute(self, executor) -> Any:
         """
@@ -288,12 +400,17 @@ class FunctionDefinitionStatement(Statement):
     Represents a function definition statement.
     
     Format:
-    function name($param1, $param2=default):
+    function|def name($param1, $param2=default):
         # indented statements
     """
     name: str
     parameters: List[Tuple[str, Optional[str]]]  # (name, default) pairs
-    body: CodeBlock
+    body: StatementOrBlock
+    
+    def __post_init__(self):
+        """Convert body to CodeBlock if it's a list."""
+        if isinstance(self.body, list):
+            self.body = CodeBlock(self.body)
     
     def execute(self, executor) -> Any:
         """
